@@ -1,0 +1,28 @@
+tcp_performance_data = {
+    "Throughput (bps)": data["end"]["sum_sent"]["bits_per_second"],
+    "Total Bytes": data["end"]["sum_sent"]["bytes"],
+    "Total Retransmits": data["end"]["sum_sent"]["retransmits"],
+    "Max SND CWND": data["end"]["streams"][0]["sender"]["max_snd_cwnd"],
+    "RTT Min/Max/Mean": {
+        "Min": data["end"]["streams"][0]["sender"]["min_rtt"],
+        "Max": data["end"]["streams"][0]["sender"]["max_rtt"],
+        "Mean": data["end"]["streams"][0]["sender"]["mean_rtt"]
+    },
+    "CPU Utilization (%)": {
+        "Host Total": data["end"]["cpu_utilization_percent"]["host_total"],
+        "Host User": data["end"]["cpu_utilization_percent"]["host_user"],
+        "Host System": data["end"]["cpu_utilization_percent"]["host_system"],
+        "Remote Total": data["end"]["cpu_utilization_percent"]["remote_total"],
+        "Remote User": data["end"]["cpu_utilization_percent"]["remote_user"],
+        "Remote System": data["end"]["cpu_utilization_percent"]["remote_system"]
+    },
+    "Intervals": [
+        {
+            "Start": interval["sum"]["start"],
+            "End": interval["sum"]["end"],
+            "Duration (s)": interval["sum"]["seconds"],
+            "Throughput (bps)": interval["sum"]["bits_per_second"],
+            "Bytes Transferred": interval["sum"]["bytes"],
+            "Retransmits": interval["sum"]["retransmits"],
+            "SND CWND": interval["streams"][0]["snd_cwnd"],
+           
