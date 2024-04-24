@@ -1,0 +1,144 @@
+import json
+
+# Sample JSON data from iperf3 output
+iperf3_data = """
+{
+    "start": {
+        "connected": [{
+            "socket": 5,
+            "local_host": "10.89.0.24",
+            "local_port": 38552,
+            "remote_host": "10.89.0.25",
+            "remote_port": 5201
+        }],
+        "version": "iperf 3.5",
+        "system_info": "Linux 3f972cc2a70f 4.18.0-485.el8.x86_64 #1 SMP Fri Apr 7 20:13:02 UTC 2023 x86_64",
+        "timestamp": {
+            "time": "Wed, 21 Feb 2024 17:47:43 GMT",
+            "timesecs": 1708537663
+        },
+        "tcp_mss_default": 1448,
+        "sock_bufsize": 0,
+        "sndbuf_actual": 16384,
+        "rcvbuf_actual": 87380,
+        "test_start": {
+            "protocol": "TCP",
+            "num_streams": 1,
+            "blksize": 131072,
+            "omit": 0,
+            "duration": 10,
+            "bytes": 0,
+            "blocks": 0,
+            "reverse": 0,
+            "tos": 0
+        }
+    },
+    "intervals": [{
+        "streams": [{
+            "socket": 5,
+            "start": 0,
+            "end": 1.0008900165557861,
+            "seconds": 1.0008900165557861,
+            "bytes": 941367752,
+            "bits_per_second": 7524245313.1015434,
+            "retransmits": 0,
+            "snd_cwnd": 550240,
+            "rtt": 87,
+            "rttvar": 10,
+            "pmtu": 1500,
+            "omitted": false
+        }],
+        "sum": {
+            "start": 0,
+            "end": 1.0008900165557861,
+            "seconds": 1.0008900165557861,
+            "bytes": 941367752,
+            "bits_per_second": 7524245313.1015434,
+            "retransmits": 0,
+            "omitted": false
+        }
+    }],
+    "end": {
+        "streams": [{
+            "sender": {
+                "socket": 5,
+                "start": 0,
+                "end": 10.001137971878052,
+                "seconds": 10.001137971878052,
+                "bytes": 10276315592,
+                "bits_per_second": 8220117047.3965769,
+                "retransmits": 0,
+                "max_snd_cwnd": 1459584,
+                "max_rtt": 134,
+                "min_rtt": 72,
+                "mean_rtt": 88
+            },
+            "receiver": {
+                "socket": 5,
+                "start": 0,
+                "end": 10.036654949188232,
+                "seconds": 10.001137971878052,
+                "bytes": 10276315592,
+                "bits_per_second": 8191028300.98281
+            }
+        }],
+        "sum_sent": {
+            "start": 0,
+            "end": 10.001137971878052,
+            "seconds": 10.001137971878052,
+            "bytes": 10276315592,
+            "bits_per_second": 8220117047.3965769,
+            "retransmits": 0
+        },
+        "sum_received": {
+            "start": 0,
+            "end": 10.036654949188232,
+            "seconds": 10.036654949188232,
+            "bytes": 10276315592,
+            "bits_per_second": 8191028300.98281
+        },
+        "cpu_utilization_percent": {
+            "host_total": 71.295492509665465,
+            "host_user": 1.1997348820958238,
+            "host_system": 70.095767545192871,
+            "remote_total": 0.65181112429529653,
+            "remote_user": 0.0333132411714989,
+            "remote_system": 0.618497515817178
+        },
+        "sender_tcp_congestion": "cubic",
+        "receiver_tcp_congestion": "cubic"
+    }
+}
+"""
+
+# Convert JSON string into Python dictionary
+data = json.loads(iperf3_data)
+
+# Get overall performance metrics
+overall_performance = data['end']
+overall_bits_per_second = overall_performance['sum_sent']['bits_per_second']
+overall_retransmits = overall_performance['sum_sent']['retransmits']
+max_snd_cwnd = overall_performance['streams'][0]['sender']['max_snd_cwnd']
+min_rtt = overall_performance['streams'][0]['sender']['min_rtt']
+max_rtt = overall_performance['streams'][0]['sender']['max_rtt']
+mean_rtt = overall_performance['streams'][0]['sender']['mean_rtt']
+host_cpu_total = overall_performance['cpu_utilization_percent']['host_total']
+remote_cpu_total = overall_performance['cpu_utilization_percent']['remote_total']
+
+print("Overall Performance:")
+print(f"Bits Per Second: {overall_bits_per_second}")
+print(f"Retransmits: {overall_retransmits}")
+print(f"Max SND CWND: {max_snd_cwnd}")
+print(f"RTT (min/max/mean): {min_rtt}/{max_rtt}/{mean_rtt}")
+print(f"Host CPU Total: {host_cpu_total}")
+print(f"Remote CPU Total: {remote_cpu_total}")
+
+# Get interval data
+print("\nInterval Data:")
+for interval in data['intervals']:
+    interval_sum = interval['sum']
+    print(f"Interval {interval_sum['start']} - {interval_sum['end']}")
+    print(f"  Bits Per Second: {interval_sum['bits_per_second']}")
+    print(f"  Retransmits: {interval_sum['retransmits']}")
+    print(f"  Omitted: {interval_sum['omitted']}")
+
