@@ -1,0 +1,45 @@
+import os
+import shutil
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+import time
+
+class NewFolderHandler(FileSystemEventHandler):
+    def on_created(self, event):
+        if event.is_directory:
+            new_folder_path = event.src_path
+            print(f"New folder detected: {new_folder_path}")
+            self.process_new_folder(new_folder_path)
+
+    def process_new_folder(self, folder_path):
+        xml_files_moved = False
+
+        for file_name in os.listdir(folder_path):
+            if file_name.endswith('.xml'):
+                xml_files_moved = True
+                source_path = os.path.join(folder_path, file_name)
+                destination_path = os.path.join('/data/completed', file_name)
+                print(f"Moving {source_path} to {destination_path}")
+                shutil.move(source_path, destination_path)
+
+        # Delete the folder if it doesn't contain any XML files
+        if xml_files_moved and not any(file_name.endswith('.xml') for file_name in os.listdir(folder_path)):
+            print(f"Deleting folder: {folder_path}")
+            shutil.rmtree(folder_path)
+        else:
+            print(f"Folder {folder_path} still contains XML files or no XML files were moved, not deleting.")
+
+if __name__ == "__main__":
+    path_to_watch = "/output"
+    event_handler = NewFolderHandler()
+    observer = Observer()
+    observer.schedule(event_handler, path_to_watch, recursive=True)
+    observer.start()
+    print(f"Monitoring {path_to_watch} for new folders...")
+
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+    observer.join()
