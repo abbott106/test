@@ -1,0 +1,66 @@
+import socket
+import threading
+import queue
+import uuid
+
+# Define the packet queue
+packet_queue = queue.Queue()
+
+# Function to handle incoming packets and save them to files
+def packet_processor():
+    while True:
+        data = packet_queue.get()
+        if data is None:
+            break
+        unique_filename = f"{uuid.uuid4()}.xml"
+        print(f"Saving packet to file: {unique_filename}")
+        
+        # Write data to a file
+        with open(unique_filename, 'wb') as file:
+            file.write(data)
+        
+        packet_queue.task_done()
+
+# Function to handle client connections
+def handle_client(client_socket):
+    while True:
+        try:
+            data = client_socket.recv(1024)
+            if not data:
+                break
+            print(f"Received data: {data}")
+            packet_queue.put(data)
+        except ConnectionResetError:
+            break
+    client_socket.close()
+
+# TCP server setup
+def tcp_server(host, port):
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind((host, port))
+    server.listen(5)
+    print(f"Server listening on {host}:{port}")
+
+    # Start the packet processor thread
+    processor_thread = threading.Thread(target=packet_processor)
+    processor_thread.daemon = True
+    processor_thread.start()
+
+    while True:
+        client_socket, addr = server.accept()
+        print(f"Accepted connection from {addr}")
+        client_handler = threading.Thread(target=handle_client, args=(client_socket,))
+        client_handler.start()
+
+# Stop the packet processor thread gracefully
+def stop_packet_processor():
+    packet_queue.put(None)
+
+if __name__ == "__main__":
+    HOST, PORT = "0.0.0.0", 9999
+    try:
+        tcp_server(HOST, PORT)
+    except KeyboardInterrupt:
+        print("Shutting down server...")
+        stop_packet_processor()
+        packet_queue.join()
