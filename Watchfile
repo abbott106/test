@@ -1,0 +1,33 @@
+import os
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+import time
+
+# Import your external function here
+from your_module import your_function  # Replace 'your_module' and 'your_function' with your actual module and function names
+
+class XMLFileHandler(FileSystemEventHandler):
+    def on_created(self, event):
+        if not event.is_directory and event.src_path.endswith('.xml'):
+            xml_file_path = event.src_path
+            print(f"New XML file detected: {xml_file_path}")
+            self.process_xml_file(xml_file_path)
+
+    def process_xml_file(self, file_path):
+        # Call your external function here
+        your_function(file_path)
+
+if __name__ == "__main__":
+    path_to_watch = "/output"  # Change this to the directory you want to watch
+    event_handler = XMLFileHandler()
+    observer = Observer()
+    observer.schedule(event_handler, path_to_watch, recursive=False)
+    observer.start()
+    print(f"Monitoring {path_to_watch} for new XML files...")
+
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+    observer.join()
