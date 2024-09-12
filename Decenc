@@ -1,0 +1,38 @@
+import argparse
+import gnupg
+import os
+
+def encrypt_file(gpg, file_path, recipient_key, destination):
+    with open(file_path, 'rb') as f:
+        status = gpg.encrypt_file(f, recipients=None, armor=False, output=destination, passphrase=recipient_key)
+    if status.ok:
+        print(f"File encrypted successfully! Saved to {destination}")
+    else:
+        print(f"Encryption failed: {status.stderr}")
+
+def decrypt_file(gpg, file_path, private_key, destination):
+    with open(file_path, 'rb') as f:
+        status = gpg.decrypt_file(f, passphrase=private_key, output=destination)
+    if status.ok:
+        print(f"File decrypted successfully! Saved to {destination}")
+    else:
+        print(f"Decryption failed: {status.stderr}")
+
+def main():
+    parser = argparse.ArgumentParser(description="Encrypt or Decrypt a file using GPG.")
+    parser.add_argument('operation', choices=['encrypt', 'decrypt'], help="Operation to perform: encrypt or decrypt")
+    parser.add_argument('key', help="Path to the key or passphrase (recipient key for encrypt, private key for decrypt)")
+    parser.add_argument('file', help="Path to the file to encrypt or decrypt")
+    parser.add_argument('destination', help="Path to save the output file")
+
+    args = parser.parse_args()
+
+    gpg = gnupg.GPG()
+
+    if args.operation == 'encrypt':
+        encrypt_file(gpg, args.file, args.key, args.destination)
+    elif args.operation == 'decrypt':
+        decrypt_file(gpg, args.file, args.key, args.destination)
+
+if __name__ == '__main__':
+    main()
