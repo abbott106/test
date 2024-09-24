@@ -1,0 +1,24 @@
+import xmlsec
+from lxml import etree
+
+# Load your XML
+with open("large_file.xml", "rb") as f:
+    tree = etree.parse(f)
+
+# Load the public key
+public_key = xmlsec.Key.from_file("public_key.pem", xmlsec.KeyFormat.PEM)
+
+# Find the Signature node
+signature_node = xmlsec.tree.find_node(tree, xmlsec.Node.SIGNATURE)
+
+# Create a signature context
+ctx = xmlsec.SignatureContext()
+ctx.key = public_key
+
+# Validate the signature
+try:
+    ctx.verify(signature_node)
+    print("Signature is valid")
+except xmlsec.VerificationError:
+    print("Signature is invalid")
+
