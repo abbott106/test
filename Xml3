@@ -1,0 +1,88 @@
+import argparse
+import xmlsec
+from lxml import etree
+
+def sign_xml(input_file, public_key_file, output_file):
+    # Load the XML file
+    parser = etree.XMLParser(remove_blank_text=True)
+    tree = etree.parse(input_file, parser)
+    
+    # Load the public key
+    key = xmlsec.Key.from_file(public_key_file, xmlsec.KeyFormat.PEM)
+
+    # Find the node where the signature will be added (root element)
+    root = tree.getroot()
+
+    # Create signature template
+    signature_node = xmlsec.template.create(
+        root, xmlsec.Transform.EXCL_C14N, xmlsec.Transform.RSA_SHA256
+    )
+
+    # Add the signature template to the XML tree
+    root.append(signature_node)
+
+    # Create a signature context
+    ctx = xmlsec.SignatureContext()
+    ctx.key = key
+
+    # Sign the document
+    ctx.sign(signature_node)
+
+    # Write the signed XML to the output file
+    with open(output_file, 'wb') as f:
+        f.write(etree.tostring(tree, pretty_print=True))
+    print(f"Signed XML saved to {output_file}")
+
+def validate_xml(input_file, private_key_file):
+    # Load the XML file
+    parser = etree.XMLParser(remove_blank_text=True)
+    tree = etree.parse(input_file, parser)
+    
+    # Load the private key
+    key = xmlsec.Key.from_file(private_key_file, xmlsec.KeyFormat.PEM)
+
+    # Find the signature node
+    signature_node = xmlsec.tree.find_node(tree, xmlsec.Node.SIGNATURE)
+
+    if signature_node is None:
+        raise ValueError("Signature not found in the document.")
+
+    # Create a signature context
+    ctx = xmlsec.SignatureContext()
+    ctx.key = key
+
+    # Verify the signature
+    try:
+        ctx.verify(signature_node)
+        print("Signature is valid.")
+    except xmlsec.VerificationError:
+        print("Signature is invalid.")
+
+def main():
+    # Set up argument parser
+    parser = argparse.ArgumentParser(description="Sign and validate XML files.")
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+
+    # Subparser for the 'sign' command
+    sign_parser = subparsers.add_parser("sign", help="Sign an XML file using a public key")
+    sign_parser.add_argument("input", type=str, help="Input XML file to sign")
+    sign_parser.add_argument("public_key", type=str, help="Public key PEM file for signing")
+    sign_parser.add_argument("output", type=str, help="Output file to save the signed XML")
+
+    # Subparser for the 'validate' command
+    validate_parser = subparsers.add_parser("validate", help="Validate a signed XML file using a private key")
+    validate_parser.add_argument("input", type=str, help="Input signed XML file to validate")
+    validate_parser.add_argument("private_key", type=str, help="Private key PEM file for validation")
+
+    # Parse the arguments
+    args = parser.parse_args()
+
+    if args.command == "sign":
+        sign_xml(args.input, args.public_key, args.output)
+    elif args.command == "validate":
+        validate_xml(args.input, args.private_key)
+    else:
+        parser.print_help()
+
+if __name__ == "__main__":
+    main()
