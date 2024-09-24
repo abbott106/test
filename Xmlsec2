@@ -1,0 +1,83 @@
+import sys
+import xmlsec
+from lxml import etree
+
+def sign_xml(input_file, public_key_file, output_file):
+    # Load the XML file
+    parser = etree.XMLParser(remove_blank_text=True)
+    tree = etree.parse(input_file, parser)
+    
+    # Load the public key
+    key = xmlsec.Key.from_file(public_key_file, xmlsec.KeyFormat.PEM)
+
+    # Find the node where the signature will be added (root element)
+    root = tree.getroot()
+
+    # Create signature template
+    signature_node = xmlsec.template.create(
+        root, xmlsec.Transform.EXCL_C14N, xmlsec.Transform.RSA_SHA256
+    )
+
+    # Add the signature template to the XML tree
+    root.append(signature_node)
+
+    # Create a signature context
+    ctx = xmlsec.SignatureContext()
+    ctx.key = key
+
+    # Sign the document
+    ctx.sign(signature_node)
+
+    # Write the signed XML to the output file
+    with open(output_file, 'wb') as f:
+        f.write(etree.tostring(tree, pretty_print=True))
+    print(f"Signed XML saved to {output_file}")
+
+def validate_xml(input_file, private_key_file):
+    # Load the XML file
+    parser = etree.XMLParser(remove_blank_text=True)
+    tree = etree.parse(input_file, parser)
+    
+    # Load the private key
+    key = xmlsec.Key.from_file(private_key_file, xmlsec.KeyFormat.PEM)
+
+    # Find the signature node
+    signature_node = xmlsec.tree.find_node(tree, xmlsec.Node.SIGNATURE)
+
+    if signature_node is None:
+        raise ValueError("Signature not found in the document.")
+
+    # Create a signature context
+    ctx = xmlsec.SignatureContext()
+    ctx.key = key
+
+    # Verify the signature
+    try:
+        ctx.verify(signature_node)
+        print("Signature is valid.")
+    except xmlsec.VerificationError:
+        print("Signature is invalid.")
+
+def main():
+    if len(sys.argv) < 5:
+        print("Usage:")
+        print("  To sign: python xml_sign_validate.py sign <input.xml> <public_key.pem> <output.xml>")
+        print("  To validate: python xml_sign_validate.py validate <input.xml> <private_key.pem>")
+        sys.exit(1)
+
+    action = sys.argv[1]
+
+    if action == "sign":
+        input_file = sys.argv[2]
+        public_key_file = sys.argv[3]
+        output_file = sys.argv[4]
+        sign_xml(input_file, public_key_file, output_file)
+    elif action == "validate":
+        input_file = sys.argv[2]
+        private_key_file = sys.argv[3]
+        validate_xml(input_file, private_key_file)
+    else:
+        print("Unknown action. Use 'sign' or 'validate'.")
+
+if __name__ == "__main__":
+    main()
