@@ -1,0 +1,24 @@
+import lxml.etree as ET
+
+def extract_signature(xml_file):
+    # Load XML
+    tree = ET.parse(xml_file)
+    root = tree.getroot()
+
+    # Define namespaces used in the XML document
+    namespaces = {
+        'ds': 'http://www.w3.org/2000/09/xmldsig#'
+    }
+
+    # Extract SignatureValue (Base64 encoded)
+    signature_value = root.find('.//ds:SignatureValue', namespaces)
+    signed_info = root.find('.//ds:SignedInfo', namespaces)
+
+    if signature_value is None or signed_info is None:
+        raise ValueError("Signature or SignedInfo not found in the XML document.")
+
+    # Get text content of SignatureValue and canonicalize SignedInfo
+    signature_value_text = signature_value.text
+    signed_info_c14n = ET.tostring(signed_info, method="c14n")
+
+    return signature_value_text, signed_info_c14n
