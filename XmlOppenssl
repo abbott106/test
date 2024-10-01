@@ -1,0 +1,72 @@
+import subprocess
+import base64
+import lxml.etree as ET
+import argparse
+import sys
+
+def extract_signature(xml_file):
+    # Load XML
+    tree = ET.parse(xml_file)
+    root = tree.getroot()
+
+    # Extract Signature Value (Base64 encoded)
+    signature_value = root.find('.//{http://www.w3.org/2000/09/xmldsig#}SignatureValue').text
+    signed_info = root.find('.//{http://www.w3.org/2000/09/xmldsig#}SignedInfo')
+
+    # Canonicalize the SignedInfo (we'll use c14n as per XMLDSig standard)
+    signed_info_c14n = ET.tostring(signed_info, method="c14n")
+
+    return signature_value, signed_info_c14n
+
+def verify_signature(signature_value, signed_info, public_key, algorithm):
+    # Decode the Base64 encoded signature
+    signature = base64.b64decode(signature_value)
+
+    # Write the canonicalized SignedInfo to a temporary file
+    with open('signed_info_canonical.xml', 'wb') as f:
+        f.write(signed_info)
+
+    # Write the signature to a file
+    with open('signature.sig', 'wb') as f:
+        f.write(signature)
+
+    # Map algorithm options to OpenSSL flags
+    algorithms = {
+        "rsa-sha256": "sha256",
+        "rsa-sha1": "sha1",
+        "rsa-sha512": "sha512",
+        # Add more algorithms as needed
+    }
+
+    if algorithm not in algorithms:
+        print(f"Unsupported algorithm: {algorithm}")
+        sys.exit(1)
+
+    # Use OpenSSL to verify the signature
+    result = subprocess.run([
+        'openssl', 'dgst', f'-{algorithms[algorithm]}', '-verify', public_key,
+        '-signature', 'signature.sig', 'signed_info_canonical.xml'
+    ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    # Check the output from OpenSSL
+    if result.returncode == 0 and b"Verified OK" in result.stdout:
+        print("Signature is valid.")
+    else:
+        print("Signature is invalid.")
+        print("OpenSSL Error: ", result.stderr.decode())
+
+if __name__ == "__main__":
+    # Setup command line argument parser
+    parser = argparse.ArgumentParser(description="Verify XML signature using OpenSSL.")
+    parser.add_argument('xml_file', help="Path to the signed XML file.")
+    parser.add_argument('public_key', help="Path to the public key (PEM format).")
+    parser.add_argument('algorithm', help="Signature algorithm (e.g., rsa-sha256, rsa-sha1, rsa-sha512).")
+
+    # Parse arguments
+    args = parser.parse_args()
+
+    # Extract the signature and the signed info from the XML
+    signature_value, signed_info_c14n = extract_signature(args.xml_file)
+
+    # Verify the signature using OpenSSL
+    verify_signature(signature_value, signed_info_c14n, args.public_key, args.algorithm)
