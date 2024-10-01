@@ -1,0 +1,45 @@
+import lxml.etree as ET
+
+def extract_signature(xml_file):
+    # Load XML
+    tree = ET.parse(xml_file)
+    root = tree.getroot()
+
+    # Define namespaces used in the XML document
+    namespaces = {
+        'ds': 'http://www.w3.org/2000/09/xmldsig#'
+    }
+
+    # Find the Signature element
+    signature_element = root.find('.//ds:Signature', namespaces)
+    if signature_element is None:
+        raise ValueError("Signature element not found in the XML document.")
+
+    # Extract SignatureValue (Base64 encoded)
+    signature_value_element = signature_element.find('ds:SignatureValue', namespaces)
+    if signature_value_element is None:
+        raise ValueError("SignatureValue element not found.")
+    
+    signature_value = signature_value_element.text
+    if signature_value is None:
+        raise ValueError("SignatureValue is empty or not found.")
+    
+    # Canonicalize the SignedInfo (using c14n as per XMLDSig standard)
+    signed_info_element = signature_element.find('ds:SignedInfo', namespaces)
+    if signed_info_element is None:
+        raise ValueError("SignedInfo element not found.")
+
+    # Canonicalize the SignedInfo element
+    signed_info_c14n = ET.tostring(signed_info_element, method="c14n")
+
+    return signature_value, signed_info_c14n
+
+if __name__ == "__main__":
+    xml_file = 'signed.xml'
+    
+    try:
+        signature_value, signed_info_c14n = extract_signature(xml_file)
+        print(f"Signature Value: {signature_value}")
+        print(f"Canonicalized SignedInfo: {signed_info_c14n}")
+    except ValueError as e:
+        print(f"Error: {e}")
