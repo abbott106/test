@@ -1,0 +1,88 @@
+import argparse
+from signxml import XMLSigner, XMLVerifier
+from lxml import etree
+
+def sign_xml(xml_path, private_key_path, output_path):
+    # Read XML content
+    with open(xml_path, "rb") as f:
+        xml_content = f.read()
+
+    # Parse the XML
+    root = etree.fromstring(xml_content)
+
+    # Read private key
+    with open(private_key_path, "rb") as key_file:
+        private_key = key_file.read()
+
+    # Find the specific node where the signature will be placed (e.g., root)
+    node_to_sign = root  # This can be any specific node you want to sign
+
+    # Sign the XML with an enveloped signature
+    signer = XMLSigner(
+        method="enveloped",  # Enveloped signature (signature will be inside the XML)
+        digest_algorithm="sha1",  # Digest algorithm as per your specification
+        signature_algorithm="rsa-sha1",  # Signature algorithm as per your specification
+        c14n_algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"  # Canonicalization
+    )
+
+    # Sign the XML, using RSA-SHA1 and enveloped signature transform
+    signed_root = signer.sign(
+        node_to_sign,
+        key=private_key,
+        reference_uri="",  # Empty string for reference to the entire document
+        digest_algorithm="sha1"  # Make sure DigestMethod is sha1
+    )
+
+    # Save the signed XML to the output path
+    with open(output_path, "wb") as f:
+        f.write(etree.tostring(signed_root, pretty_print=True))
+
+    print(f"XML signed (enveloped) and saved to {output_path}")
+
+def verify_xml(xml_path, public_key_path):
+    # Read XML content
+    with open(xml_path, "rb") as f:
+        signed_xml_content = f.read()
+
+    # Parse the XML
+    signed_root = etree.fromstring(signed_xml_content)
+
+    # Read the public key
+    with open(public_key_path, "rb") as key_file:
+        public_key = key_file.read()
+
+    # Verify the signed XML (using the public key)
+    verifier = XMLVerifier()
+    try:
+        verifier.verify(signed_root, require_x509=False, key=public_key)
+        print("The XML signature is valid.")
+    except Exception as e:
+        print(f"Verification failed: {e}")
+
+def main():
+    parser = argparse.ArgumentParser(description="Sign or verify large XML files using a private key and public key.")
+    
+    subparsers = parser.add_subparsers(dest='command', help="Choose to sign or verify")
+    
+    # Subparser for signing
+    sign_parser = subparsers.add_parser('sign', help="Sign an XML file")
+    sign_parser.add_argument('xml_path', help="Path to the XML file to sign")
+    sign_parser.add_argument('private_key_path', help="Path to the private key (PEM format) used for signing")
+    sign_parser.add_argument('output_path', help="Path to save the signed XML file")
+    
+    # Subparser for verifying
+    verify_parser = subparsers.add_parser('verify', help="Verify an XML file")
+    verify_parser.add_argument('xml_path', help="Path to the signed XML file")
+    verify_parser.add_argument('public_key_path', help="Path to the public key (PEM format) used for verification")
+    
+    args = parser.parse_args()
+    
+    if args.command == 'sign':
+        sign_xml(args.xml_path, args.private_key_path, args.output_path)
+    elif args.command == 'verify':
+        verify_xml(args.xml_path, args.public_key_path)
+    else:
+        parser.print_help()
+
+if __name__ == "__main__":
+    main()
