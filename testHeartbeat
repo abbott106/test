@@ -1,0 +1,178 @@
+#!/usr/bin/env python3
+import time, tempfile, sys, logging, os, shutil
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+from lxml import etree as ET
+
+from cds_logger import log_debug, log_info, log_warning, log_error, log_critical, makeLogger
+from cert_and_crl_verifier import is_certificate_valid
+from xml_validator import validate_xml
+from xmlSignatureVerify import verify_signature
+import tempfile
+
+SYSTEM_PUBKEY = os.environ['SYSTEM_PUBKEY']
+
+class NewFolderHandler(FileSystemEventHandler):
+
+    def remove_file(self, filepath):
+        log_info(f"deleting file {filepath}")
+        os.remove(filepath)
+        
+    def on_created(self, event):
+        if event.is_directory:
+            new_file_path = event.src_path
+            self.detect_file_changes(new_file_path)
+            log_info(f"New folder detected: {new_file_path}")
+            self.process_new_folder(new_file_path)
+            
+    def detect_file_changes(self, file_path, interval=1):
+        last_modified = os.path.getmtime(file_path)
+        while True:
+            time.sleep(interval)
+            current_modified = os.path.getmtime(file_path)
+            if current_modified != last_modified:
+                log_info("File has changed!")
+                last_modified = current_modified
+            log_info("File NOT pitching!")
+            return
+            
+
+    def validate_certs(self, file_path, file_name):
+        certTmp = tempfile.NamedTemporaryFile(delete=False)
+        crlTmp = tempfile.NamedTemporaryFile(delete=False)
+
+        try:
+            huge_parser = ET.XMLParser(huge_tree=True)
+            xml = ET.parse(file_path, huge_parser)
+            content = xml.getroot()
+            
+            crls = content.find('cds_payload').find('headvalidation').find('crls')
+            ticket_num = file_name[3:-11]
+            child_crls = [] 
+            certs = []
+
+         
+            
+            for certificate in content:
+                if certificate.tag.startswith("certificate"):
+                    cert = certificate.find('cds_payload').find("content").text
+                    
+                    with open(certTmp.name, "w") as certFile:
+                       
+                        certFile.write(cert)
+                        certFile.close()
+
+                       
+                        for child_crl in crls:
+                            if child_crl.tag.startswith("crl"):
+                                crl = child_crl.text
+                                with open(crlTmp.name, "w") as crlFile:
+                                    crlFile.write(crl)
+                                    crlFile.close()
+
+                                
+                                    try:
+                                        #validity = is_certificate_expired(ticket_number=ticket_num, cert_pem_path=certFile.name)
+                                        log_info(f"Running validity check on {file_path} +++ {file_name}")
+
+
+
+                                        validity = is_certificate_valid(ticket_number=ticket_num, cert_pem_path=certFile.name, crl_pem_path = crlFile.name)
+                                        log_info(f"validity is {validity}")
+                                        if validity != True:  
+                                            os.remove(certFile.name)
+                                            os.remove(crlFile.name)  
+                                            print("validity invalid")
+                                            return False
+                                        
+                                        
+                                    except Exception as e:
+                                        raise(e)
+                                    os.remove(crlFile.name)
+                        os.remove(certFile.name)
+            return True
+        except Exception as e:
+            log_error(f"failed to validate {file_path}")
+            log_error(e)
+            return False
+            
+
+
+    def process_new_folder(self, folder_path):
+
+
+
+        
+        xml_files_moved = False
+
+        for file_name in os.listdir(folder_path):
+            if file_name.endswith('.xml'):
+                xml_files_moved = True
+                source_path = os.path.join(folder_path, file_name)
+                destination_path = os.path.join('/data/completed', file_name)
+
+                try:
+                    validity = validate_xml(source_path)
+                    if validity != True:
+                        log_error(f"failed to validate signatures for {file_name}")
+                        self.remove_file(source_path)
+                        return
+                    log_info("XML is Valid!")
+                except Exception as e:
+                    log_error(f"failed to validate signatures for {file_name}")
+                    log_error(e)
+                    self.remove_file(source_path)
+                    return
+                
+                try:
+                    validity = self.validate_certs(source_path, file_name)
+                    if validity != True:
+                        log_error(f"{file_name} certs/crls failed validity check")
+                        self.remove_file(source_path)
+                        return
+                    log_info("Certs are Valid!")
+                except:
+                    log_error(f"failed to validate certificates for {file_name}")
+                    self.remove_file(source_path)
+                    return
+
+                try:
+                    pubkey = "/system_pubkey/pubkey.pem"
+                    #validate xml signature
+                    
+                    signature_validity = verify_signature(xml_file = source_path,public_key=pubkey, ticketnum=file_name)
+                    if signature_validity != True:
+                        log_error(f"{file_name} signature is invalid")
+                        self.remove_file(source_path)
+                        return
+                    log_info(f"{file_name} signature is valid")
+                except Exception as e:
+                    log_error(f'Failed to validate signature {e}')
+                    self.remove_file(source_path)
+                    return
+
+                log_info(f"Moving {source_path} to {destination_path}")
+                
+                shutil.move(source_path, destination_path)
+
+        if xml_files_moved and not any(file_name.endswith('.xml') for file_name in os.listdir(folder_path)):
+            log_info(f"Deleting folder: {folder_path} contains no xmls")
+            shutil.rmtree(folder_path)
+        else:
+            log_info(f"Folder {folder_path} still contains XML files or no XML files were moved, not deleting.")
+
+if __name__ == "__main__":
+    makeLogger()
+    path_to_watch = "/output"
+    event_handler = NewFolderHandler()
+    observer = Observer()
+    observer.schedule(event_handler, path_to_watch, recursive=True)
+    observer.start()
+    log_info(f"Monitoring {path_to_watch} for new folders...")
+
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+    observer.join()
