@@ -1,0 +1,33 @@
+def package_xmls(self, extra_xmls=None):
+        log_info(f"Packaging XML {self.file_path}")
+        
+        xml_dir = "/validated_xmls"
+        self.zipfile_path = "/zipped_xmls/"+ self.file_name[:-4] + ".zip"
+        log_info(f"zipping file at {self.zipfile_path}")
+        base_folder_name = self.file_name[:-4]+"/"
+
+        
+        if extra_xmls != None:
+            with zipfile.ZipFile(self.zipfile_path, 'w') as zipf:
+                for filename in extra_xmls:
+                    file_path = os.path.join(xml_dir, filename) 
+                    zipf.write(file_path, base_folder_name+base_folder_name+filename)
+                    os.remove(file_path)
+                zipf.write(self.file_path, base_folder_name+self.file_name)
+                os.remove(self.file_path)
+                for root, dirs, files in os.walk("/append_files"):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        zipf.write(file_path, base_folder_name+os.path.relpath(file_path, "/append_files"))
+                
+        elif extra_xmls == None:
+            with zipfile.ZipFile(self.zipfile_path, 'w') as zipf:
+                zipf.write(self.file_path, base_folder_name+base_folder_name+self.file_name)
+                os.remove(self.file_path)
+                for root, dirs, files in os.walk("/append_files"):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        zipf.write(file_path, base_folder_name+os.path.relpath(file_path, "/append_files"))
+        
+        self.send_zipfile()
+        
