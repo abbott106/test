@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:ds="http://www.w3.org/2000/09/xmldsig#"
+           targetNamespace="http://www.example.com/root"
+           xmlns="http://www.example.com/root"
+           elementFormDefault="qualified"
+           attributeFormDefault="unqualified">
+
+    <!-- Import the XML Digital Signature namespace -->
+    <xs:import namespace="http://www.w3.org/2000/09/xmldsig#"/>
+
+    <!-- Define the Root element -->
+    <xs:element name="Root">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="Data" type="xs:string"/>
+                <xs:element ref="ds:Signature"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+</xs:schema>
