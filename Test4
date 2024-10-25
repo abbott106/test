@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:ds="http://www.w3.org/2000/09/xmldsig#"
+           targetNamespace="http://www.w3.org/2000/09/xmldsig#"
+           elementFormDefault="qualified"
+           attributeFormDefault="unqualified">
+
+    <!-- Root element definition -->
+    <xs:element name="Root" xmlns="">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="cds_payload">
+                    <xs:complexType>
+                        <xs:sequence>
+                            <xs:element name="head">
+                                <xs:complexType>
+                                    <xs:sequence>
+                                        <xs:element type="xs:float" name="packageversion"/>
+                                        <xs:element type="xs:string" name="priority"/>
+                                        <xs:element type="xs:string" name="classification"/>
+                                        <xs:element type="xs:string" name="project"/>
+                                        <xs:element type="xs:byte" name="version"/>
+                                        <xs:element type="xs:date" name="date"/>
+                                        <xs:element type="xs:time" name="time"/>
+                                        <xs:element type="xs:string" name="sourcenet"/>
+                                        <xs:element type="xs:string" name="destinationnet"/>
+                                        <xs:element type="xs:string" name="destinationsite"/>
+                                        <xs:element type="xs:string" name="destinationpath"/>
+                                        <xs:element type="xs:string" name="metadata"/>
+                                        <xs:element type="xs:string" name="xmlfilename"/>
+                                        <xs:element name="file">
+                                            <xs:complexType>
+                                                <xs:sequence>
+                                                    <xs:element type="xs:string" name="sha512"/>
+                                                </xs:sequence>
+                                                <xs:attribute type="xs:string" name="name"/>
+                                            </xs:complexType>
+                                        </xs:element>
+                                    </xs:sequence>
+                                </xs:complexType>
+                            </xs:element>
+                            <xs:element name="headvalidation">
+                                <xs:complexType>
+                                    <xs:sequence>
+                                        <xs:element name="crls">
+                                            <xs:complexType>
+                                                <xs:sequence>
+                                                    <xs:element name="crl" maxOccurs="unbounded" minOccurs="0">
+                                                        <xs:complexType>
+                                                            <xs:simpleContent>
+                                                                <xs:extension base="xs:string">
+                                                                    <xs:attribute type="xs:string" name="name" use="optional"/>
+                                                                </xs:extension>
+                                                            </xs:simpleContent>
+                                                        </xs:complexType>
+                                                    </xs:element>
+                                                </xs:sequence>
+                                            </xs:complexType>
+                                        </xs:element>
+                                        <xs:element type="xs:string" name="headsha512"/>
+                                        <xs:element name="sig" maxOccurs="unbounded" minOccurs="0">
+                                            <xs:complexType>
+                                                <xs:simpleContent>
+                                                    <xs:extension base="xs:string">
+                                                        <xs:attribute type="xs:string" name="name" use="optional"/>
+                                                    </xs:extension>
+                                                </xs:simpleContent>
+                                            </xs:complexType>
+                                        </xs:element>
+                                    </xs:sequence>
+                                </xs:complexType>
+                            </xs:element>
+                            <xs:element name="file">
+                                <xs:complexType>
+                                    <xs:sequence>
+                                        <xs:element type="xs:string" name="base64"/>
+                                    </xs:sequence>
+                                    <xs:attribute type="xs:string" name="name"/>
+                                </xs:complexType>
+                            </xs:element>
+                            <xs:element name="certificate" maxOccurs="unbounded" minOccurs="0">
+                                <xs:complexType>
+                                    <xs:sequence>
+                                        <xs:element type="xs:string" name="pubkey"/>
+                                        <xs:element type="xs:string" name="content"/>
+                                    </xs:sequence>
+                                    <xs:attribute type="xs:string" name="name" use="optional"/>
+                                </xs:complexType>
+                            </xs:element>
+                        </xs:sequence>
+                    </xs:complexType>
+                </xs:element>
+                <xs:element ref="ds:Signature"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- Signature element definition in the ds namespace -->
+    <xs:element name="Signature" type="ds:SignatureType"/>
+
+    <!-- SignatureType definition for XML Digital Signature -->
+    <xs:complexType name="SignatureType">
+        <xs:sequence>
+            <xs:element name="SignedInfo" type="ds:SignedInfoType"/>
+            <xs:element type="xs:string" name="SignatureValue"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <!-- SignedInfoType definition -->
+    <xs:complexType name="SignedInfoType">
+        <xs:sequence>
+            <xs:element name="CanonicalizationMethod">
+                <xs:complexType>
+                    <xs:simpleContent>
+                        <xs:extension base="xs:string">
+                            <xs:attribute type="xs:anyURI" name="Algorithm"/>
+                        </xs:extension>
+                    </xs:simpleContent>
+                </xs:complexType>
+            </xs:element>
+            <xs:element name="SignatureMethod">
+                <xs:complexType>
+                    <xs:simpleContent>
+                        <xs:extension base="xs:string">
+                            <xs:attribute type="xs:anyURI" name="Algorithm"/>
+                        </xs:extension>
+                    </xs:simpleContent>
+                </xs:complexType>
+            </xs:element>
+            <xs:element name="Reference">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element name="Transforms">
+                            <xs:complexType>
+                                <xs:sequence>
+                                    <xs:element name="Transform" maxOccurs="unbounded" minOccurs="0">
+                                        <xs:complexType>
+                                            <xs:simpleContent>
+                                                <xs:extension base="xs:string">
+                                                    <xs:attribute type="xs:anyURI" name="Algorithm" use="optional"/>
+                                                </xs:extension>
+                                            </xs:simpleContent>
+                                        </xs:complexType>
+                                    </xs:element>
+                                </xs:sequence>
+                            </xs:complexType>
+                        </xs:element>
+                        <xs:element name="DigestMethod">
+                            <xs:complexType>
+                                <xs:simpleContent>
+                                    <xs:extension base="xs:string">
+                                        <xs:attribute type="xs:anyURI" name="Algorithm"/>
+                                    </xs:extension>
+                                </xs:simpleContent>
+                            </xs:complexType>
+                        </xs:element>
+                        <xs:element type="xs:string" name="DigestValue"/>
+                    </xs:sequence>
+                    <xs:attribute type="xs:string" name="URI"/>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+</xs:schema>
