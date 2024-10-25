@@ -1,0 +1,4 @@
+test6.xsd:92: element element: Schemas parser error : Element '{http://www.w3.org/2001/XMLSchema}element', attribute 'ref': References from this schema to components in the namespace 'http://www.w3.org/2000/09/xmldsig#' are not allowed, since not indicated by an import statement.
+test6.xsd:162: element element: Schemas parser error : Element '{http://www.w3.org/2001/XMLSchema}element', attribute 'type': References from this schema to components in the namespace 'http://www.w3.org/2000/09/xmldsig#' are not allowed, since not indicated by an import statement.
+WXS schema test6.xsd failed to compile
+[dodadmin@centos8-abbotm-001 cds]$ 
