@@ -1,0 +1,3 @@
+ xmllint --schema test3.xsd test.xml --noout
+test.xml:42: element Signature: Schemas validity error : Element '{http://www.w3.org/2000/09/xmldsig#}Signature': This element is not expected. Expected is ( Signature ).
+test.xml fails to validate
