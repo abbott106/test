@@ -1,0 +1,254 @@
+package main
+
+import (
+	"bytes"
+	"embed"
+	"encoding/base64"
+	"encoding/xml"
+	"flag"
+	"fmt"
+	"io/ioutil"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"sort"
+	"strconv"
+	"strings"
+	"syscall"
+	"unsafe"
+)
+
+//go:embed gpg-static
+var gpgStaticFile embed.FS
+
+type Root struct {
+	XMLName    xml.Name   `xml:"Root"`
+	CdsPayload CdsPayload `xml:"cds_payload"`
+}
+
+type CdsPayload struct {
+	Files []File `xml:"file"`
+}
+
+type File struct {
+	Name   string   `xml:"name,attr"`
+	Base64 []string `xml:"base64"`
+}
+
+// Helper function to print errors with line numbers
+func printError(err error) {
+	if err != nil {
+		_, file, line, _ := runtime.Caller(1)
+		fmt.Printf("Error at %s:%d: %v\n", filepath.Base(file), line, err)
+	}
+}
+
+// disableEcho disables terminal echo for secure passphrase entry
+func disableEcho() {
+	var termios syscall.Termios
+	fd := syscall.Stdin
+	if _, _, err := syscall.Syscall6(syscall.SYS_IOCTL, uintptr(fd), uintptr(syscall.TCGETS), uintptr(unsafe.Pointer(&termios)), 0, 0, 0); err != 0 {
+		return
+	}
+	termios.Lflag &^= syscall.ECHO
+	syscall.Syscall6(syscall.SYS_IOCTL, uintptr(fd), uintptr(syscall.TCSETS), uintptr(unsafe.Pointer(&termios)), 0, 0, 0)
+}
+
+// enableEcho re-enables terminal echo
+func enableEcho() {
+	var termios syscall.Termios
+	fd := syscall.Stdin
+	if _, _, err := syscall.Syscall6(syscall.SYS_IOCTL, uintptr(fd), uintptr(syscall.TCGETS), uintptr(unsafe.Pointer(&termios)), 0, 0, 0); err != 0 {
+		return
+	}
+	termios.Lflag |= syscall.ECHO
+	syscall.Syscall6(syscall.SYS_IOCTL, uintptr(fd), uintptr(syscall.TCSETS), uintptr(unsafe.Pointer(&termios)), 0, 0, 0)
+}
+
+// extractGpgStatic extracts the embedded gpg-static binary to a temporary file
+func extractGpgStatic() (string, error) {
+	data, err := gpgStaticFile.ReadFile("gpg-static")
+	if err != nil {
+		return "", fmt.Errorf("failed to read embedded gpg-static binary: %w", err)
+	}
+
+	tmpGpgPath := filepath.Join(os.TempDir(), "gpg-static")
+	err = ioutil.WriteFile(tmpGpgPath, data, 0755)
+	if err != nil {
+		return "", fmt.Errorf("failed to write gpg-static to temp file: %w", err)
+	}
+
+	return tmpGpgPath, nil
+}
+
+func main() {
+	// Define command-line flag for optional GPG key import
+	importKey := flag.String("import-key", "", "Path to the GPG key file to import (optional)")
+	flag.Parse()
+
+	// Find the folder that starts with "ISD" in the current directory
+	folders, err := filepath.Glob("ISD*")
+	if err != nil || len(folders) == 0 {
+		printError(fmt.Errorf("no folder starting with 'ISD' found in the current directory"))
+		return
+	}
+	folder := folders[0]
+
+	// Find the head XML file (without an underscore in the name)
+	xmlFiles, err := filepath.Glob(filepath.Join(folder, "*.xml"))
+	if err != nil || len(xmlFiles) == 0 {
+		printError(fmt.Errorf("no XML files found in the folder: %s", folder))
+		return
+	}
+
+	var headFile string
+	for _, file := range xmlFiles {
+		if !strings.Contains(filepath.Base(file), "_") {
+			headFile = file
+			break
+		}
+	}
+
+	if headFile == "" {
+		printError(fmt.Errorf("no head file found (file without underscore in name)"))
+		return
+	}
+
+	// Read the head XML file
+	xmlData, err := ioutil.ReadFile(headFile)
+	if err != nil {
+		printError(fmt.Errorf("reading head XML file: %s", headFile))
+		return
+	}
+
+	// Unmarshal the XML data from the head file
+	var headRoot Root
+	err = xml.Unmarshal(xmlData, &headRoot)
+	if err != nil {
+		printError(fmt.Errorf("unmarshaling head XML: %s", headFile))
+		return
+	}
+
+	// Check if the <base64> content starts with "filename" to identify the header file
+	isHeaderFile := false
+	var outputFileName string
+	var concatenatedData strings.Builder
+	for _, file := range headRoot.CdsPayload.Files {
+		if len(file.Base64) > 0 && strings.HasPrefix(file.Base64[0], "filename") {
+			isHeaderFile = true
+			outputFileName = file.Name
+			break
+		}
+	}
+
+	if isHeaderFile {
+		// Handle case 1: Header file with child files
+		if outputFileName == "" {
+			printError(fmt.Errorf("no output file name specified in the head file"))
+			return
+		}
+
+		// Find and sort child XML files with an underscore
+		var childFiles []string
+		for _, file := range xmlFiles {
+			baseName := filepath.Base(file)
+			if strings.Contains(baseName, "_") {
+				childFiles = append(childFiles, file)
+			}
+		}
+		if len(childFiles) == 0 {
+			printError(fmt.Errorf("no child files found with an underscore in the name"))
+			return
+		}
+		sort.Slice(childFiles, func(i, j int) bool {
+			getNum := func(filename string) int {
+				parts := strings.Split(strings.TrimSuffix(filename, ".xml"), "_")
+				if len(parts) < 2 {
+					return 0
+				}
+				num, err := strconv.Atoi(parts[1])
+				if err != nil {
+					return 0
+				}
+				return num
+			}
+			return getNum(filepath.Base(childFiles[i])) < getNum(filepath.Base(childFiles[j]))
+		})
+
+		// Concatenate <base64> data from child files in the sorted order
+		for _, childFile := range childFiles {
+			childXMLData, err := ioutil.ReadFile(childFile)
+			if err != nil {
+				printError(fmt.Errorf("reading child XML file: %s", childFile))
+				return
+			}
+			var childRoot Root
+			err = xml.Unmarshal(childXMLData, &childRoot)
+			if err != nil {
+				printError(fmt.Errorf("unmarshaling child XML: %s", childFile))
+				return
+			}
+			for _, file := range childRoot.CdsPayload.Files {
+				for _, base64Data := range file.Base64 {
+					concatenatedData.WriteString(base64Data)
+				}
+			}
+		}
+	} else {
+		// Handle case 2: Not a header file, process data within the same XML file
+		for _, file := range headRoot.CdsPayload.Files {
+			for _, base64Data := range file.Base64 {
+				concatenatedData.WriteString(base64Data)
+			}
+			outputFileName = file.Name
+		}
+	}
+
+	// Decode the concatenated base64 data
+	decodedData, err := base64.StdEncoding.DecodeString(concatenatedData.String())
+	if err != nil {
+		printError(fmt.Errorf("decoding base64 data"))
+		return
+	}
+
+	// Save the decoded data to the specified output file
+	err = ioutil.WriteFile(outputFileName, decodedData, 0644)
+	if err != nil {
+		printError(fmt.Errorf("writing to file: %s", outputFileName))
+		return
+	}
+
+	fmt.Printf("Data decoded and saved to %s\n", outputFileName)
+
+	// Extract the `gpg-static` binary
+	gpgPath, err := extractGpgStatic()
+	if err != nil {
+		printError(fmt.Errorf("extracting gpg-static: %v", err))
+		return
+	}
+
+	// Handle optional GPG key import
+	if *importKey != "" {
+		cmd := exec.Command(gpgPath, "--import", *importKey)
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+		if err := cmd.Run(); err != nil {
+			printError(fmt.Errorf("importing GPG key: %s", stderr.String()))
+			return
+		}
+		fmt.Printf("GPG key imported from %s\n", *importKey)
+	}
+
+	// Decrypt the file using the embedded gpg-static binary
+	decryptedFileName := strings.TrimSuffix(outputFileName, ".pgp")
+	cmd := exec.Command(gpgPath, "--decrypt", "--batch", "--yes", "--output", decryptedFileName, outputFileName)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		printError(fmt.Errorf("decrypting file: %s", stderr.String()))
+		return
+	}
+
+	fmt.Printf("File decrypted and saved as %s\n", decryptedFileName)
+}
