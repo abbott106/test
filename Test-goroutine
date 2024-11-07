@@ -1,0 +1,69 @@
+package main
+
+import (
+	"bytes"
+	"fmt"
+	"os/exec"
+	"time"
+)
+
+// Function to run the gpg-agent daemon as a goroutine
+func runDaemon(gpgAgentPath string, done chan<- error) {
+	daemon := exec.Command(gpgAgentPath, "--daemon")
+	var stderr bytes.Buffer
+	daemon.Stderr = &stderr
+
+	if err := daemon.Start(); err != nil {
+		done <- fmt.Errorf("daemon.Start: %v", err)
+		return
+	}
+
+	// Wait for daemon to finish
+	if err := daemon.Wait(); err != nil {
+		done <- fmt.Errorf("daemon exited: %v, %s", err, stderr.String())
+		return
+	}
+
+	done <- nil
+}
+
+// Function to kill the gpg-agent process
+func killAgent() error {
+	killcmd := exec.Command("killall", "gpg-agent")
+	var stderr bytes.Buffer
+	killcmd.Stderr = &stderr
+
+	if err := killcmd.Run(); err != nil {
+		return fmt.Errorf("failed to kill gpg-agent: %v, %s", err, stderr.String())
+	}
+
+	return nil
+}
+
+func main() {
+	gpgAgentPath := "/path/to/gpg-agent" // Replace with the actual path to gpg-agent
+
+	// Run the first daemon command in a goroutine
+	daemonDone := make(chan error)
+	go runDaemon(gpgAgentPath, daemonDone)
+
+	// Give the first daemon command some time to start up
+	time.Sleep(2 * time.Second)
+
+	// Kill any existing gpg-agent process
+	if err := killAgent(); err != nil {
+		fmt.Printf("Error killing gpg-agent: %v\n", err)
+	}
+
+	// Wait for the first daemon to complete
+	if err := <-daemonDone; err != nil {
+		fmt.Printf("First daemon error: %v\n", err)
+	}
+
+	// Run the daemon command again in the main goroutine
+	if err := exec.Command(gpgAgentPath, "--daemon").Run(); err != nil {
+		fmt.Printf("Error restarting gpg-agent: %v\n", err)
+	} else {
+		fmt.Println("gpg-agent restarted successfully")
+	}
+}
