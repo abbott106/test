@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# Check if XML_MAX_LIFETIME is set
+if [ -z "$XML_MAX_LIFETIME" ]; then
+  echo "Error: XML_MAX_LIFETIME environment variable is not set."
+  exit 1
+fi
+
+# Validate that XML_MAX_LIFETIME is a positive integer
+if ! [[ "$XML_MAX_LIFETIME" =~ ^[0-9]+$ ]]; then
+  echo "Error: XML_MAX_LIFETIME must be a positive integer."
+  exit 1
+fi
+
+# Calculate the time in minutes
+MAX_MINUTES=$(( XML_MAX_LIFETIME * 60 ))
+
+# Find .xml files modified or created longer than XML_MAX_LIFETIME hours
+echo "Searching for .xml files older than $XML_MAX_LIFETIME hours..."
+find / -type f -name "*.xml" -mmin +$MAX_MINUTES -print 2>/dev/null
+
+# Check if the find command was successful
+if [ $? -ne 0 ]; then
+  echo "Error: Failed to search for .xml files."
+  exit 1
+fi
+
+echo "Search complete."
