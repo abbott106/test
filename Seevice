@@ -1,0 +1,7 @@
+[Unit]
+Description=Run your bash script
+
+[Service]
+ExecStart=/path/to/your-script.sh
+User=your-username
+Group=your-groupname
