@@ -1,0 +1,23 @@
+{
+    "columns": [
+        {
+            "name": "id",
+            "value": "1",
+            "logic": {
+                "iterate": 1
+            }
+        },
+        {
+            "name": "name",
+            "value": "John"
+        },
+        {
+            "name": "age",
+            "value": "30"
+        },
+        {
+            "name": "city",
+            "value": "New York"
+        }
+    ]
+}
