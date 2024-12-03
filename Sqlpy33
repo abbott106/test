@@ -1,0 +1,84 @@
+import json
+import sqlite3
+import argparse
+import os
+
+
+def load_json(json_file):
+    """Load JSON data from a file."""
+    if not os.path.exists(json_file):
+        raise FileNotFoundError(f"JSON file '{json_file}' does not exist.")
+    with open(json_file, 'r') as file:
+        return json.load(file)
+
+
+def create_table_if_not_exists(cursor, table_name, columns):
+    """Create a table if it doesn't exist."""
+    column_definitions = ', '.join([f"{col['name']} TEXT" for col in columns])
+    cursor.execute(f"""
+        CREATE TABLE IF NOT EXISTS {table_name} ({column_definitions});
+    """)
+
+
+def apply_logic(row, columns):
+    """Apply logic to generate a new row."""
+    new_row = {}
+    for column in columns:
+        name = column['name']
+        value = column['value']
+        logic = column.get('logic')
+
+        # Apply iteration logic if present
+        if logic and 'iterate' in logic:
+            value = int(value) + logic['iterate']
+            column['value'] = str(value)  # Update for subsequent iterations
+
+        new_row[name] = value
+    return new_row
+
+
+def insert_repeated_row(cursor, table_name, columns, repeat_count):
+    """Insert rows with applied logic repeatedly into the table."""
+    column_names = [col['name'] for col in columns]
+    placeholders = ', '.join(['?' for _ in column_names])
+    query = f"INSERT INTO {table_name} ({', '.join(column_names)}) VALUES ({placeholders})"
+
+    for _ in range(repeat_count):
+        row = apply_logic({}, columns)
+        cursor.execute(query, tuple(row.values()))
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Insert rows into a database based on JSON logic.")
+    parser.add_argument("json_file", help="Path to the JSON file defining the rows and logic.")
+    parser.add_argument("db_file", help="Path to the SQLite database file.")
+    parser.add_argument("--table", default="data", help="Table name to insert rows into (default: 'data').")
+    parser.add_argument("--rows", type=int, default=10, help="Number of times to insert rows (default: 10).")
+    args = parser.parse_args()
+
+    # Load JSON data
+    data = load_json(args.json_file)
+    if "columns" not in data or not isinstance(data["columns"], list):
+        raise ValueError("The JSON file must contain a 'columns' key with an array of column definitions.")
+    
+    columns = data["columns"]
+
+    # Connect to SQLite database
+    conn = sqlite3.connect(args.db_file)
+    cursor = conn.cursor()
+
+    # Create table if it doesn't exist
+    create_table_if_not_exists(cursor, args.table, columns)
+
+    # Insert rows repeatedly with logic applied
+    insert_repeated_row(cursor, args.table, columns, args.rows)
+
+    # Commit and close
+    conn.commit()
+    conn.close()
+
+    print(f"Inserted rows {args.rows} times into the table '{args.table}' in '{args.db_file}'.")
+
+
+if __name__ == "__main__":
+    main()
