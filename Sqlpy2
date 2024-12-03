@@ -1,0 +1,70 @@
+import json
+import sqlite3
+import argparse
+import os
+
+
+def load_json(json_file):
+    """Load JSON data from a file."""
+    if not os.path.exists(json_file):
+        raise FileNotFoundError(f"JSON file '{json_file}' does not exist.")
+    with open(json_file, 'r') as file:
+        return json.load(file)
+
+
+def create_table_if_not_exists(cursor, table_name, columns):
+    """Create a table if it doesn't exist."""
+    column_definitions = ', '.join([f"{col} TEXT" for col in columns])
+    cursor.execute(f"""
+        CREATE TABLE IF NOT EXISTS {table_name} ({column_definitions});
+    """)
+
+
+def insert_repeated_row(cursor, table_name, row, repeat_count):
+    """Insert the first row repeatedly into the table."""
+    if not row:
+        raise ValueError("No row data available for insertion.")
+    
+    columns = row.keys()
+    placeholders = ', '.join(['?' for _ in columns])
+    query = f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ({placeholders})"
+    
+    for _ in range(repeat_count):
+        cursor.execute(query, tuple(row.values()))
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Insert the first row from a JSON document repeatedly into a database.")
+    parser.add_argument("json_file", help="Path to the JSON file containing the rows.")
+    parser.add_argument("db_file", help="Path to the SQLite database file.")
+    parser.add_argument("--table", default="data", help="Table name to insert rows into (default: 'data').")
+    parser.add_argument("--rows", type=int, default=10, help="Number of times to insert the first row (default: 10).")
+    args = parser.parse_args()
+
+    # Load JSON data
+    data = load_json(args.json_file)
+    if not isinstance(data, list) or len(data) == 0:
+        raise ValueError("The JSON file must contain a non-empty array of objects.")
+    
+    # Get the first row
+    first_row = data[0]
+
+    # Connect to SQLite database
+    conn = sqlite3.connect(args.db_file)
+    cursor = conn.cursor()
+
+    # Create table if it doesn't exist
+    create_table_if_not_exists(cursor, args.table, first_row.keys())
+
+    # Insert the first row repeatedly
+    insert_repeated_row(cursor, args.table, first_row, args.rows)
+
+    # Commit and close
+    conn.commit()
+    conn.close()
+
+    print(f"Inserted the first row {args.rows} times into the table '{args.table}' in '{args.db_file}'.")
+
+
+if __name__ == "__main__":
+    main()
