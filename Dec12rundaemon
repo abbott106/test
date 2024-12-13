@@ -1,0 +1,25 @@
+func runDaemon(gpgAgentPath, socketDir string, done chan<- error) {
+	// Prepare the socket directory
+	if err := os.MkdirAll(socketDir, 0700); err != nil {
+		done <- fmt.Errorf("failed to create socket directory: %v", err)
+		return
+	}
+
+	// Run the static gpg-agent daemon with custom socket
+	daemon := exec.Command(gpgAgentPath, "--daemon", "--use-standard-socket", fmt.Sprintf("--homedir=%s", socketDir))
+	var stderr bytes.Buffer
+	daemon.Stderr = &stderr
+
+	if err := daemon.Start(); err != nil {
+		done <- fmt.Errorf("daemon.Start: %v", err)
+		return
+	}
+
+	// Wait for daemon to finish
+	if err := daemon.Wait(); err != nil {
+		done <- fmt.Errorf("daemon exited: %v, %s", err, stderr.String())
+		return
+	}
+
+	done <- nil
+}
