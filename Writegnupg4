@@ -1,0 +1,68 @@
+package main
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+)
+
+func writeGpgAgentFiles(baseDir string) error {
+	// Get the current user's UID
+	uid := os.Getuid()
+	uidStr := strconv.Itoa(uid)
+
+	// Construct the path to the gnupg directory
+	gnupgDir := filepath.Join(baseDir, uidStr, "gnupg")
+
+	// Check if the gnupg directory exists
+	if _, err := os.Stat(gnupgDir); os.IsNotExist(err) {
+		return fmt.Errorf("gnupg directory %s does not exist", gnupgDir)
+	}
+
+	// Read entries in the gnupg directory to find subdirectories
+	entries, err := os.ReadDir(gnupgDir)
+	if err != nil {
+		return fmt.Errorf("failed to read gnupg directory: %v", err)
+	}
+
+	for _, entry := range entries {
+		// Skip files; we only care about subdirectories
+		if !entry.IsDir() {
+			continue
+		}
+
+		// Construct the path to the subdirectory
+		subDirPath := filepath.Join(gnupgDir, entry.Name())
+
+		// Construct the file path for S.gpg-agent
+		targetFilePath := filepath.Join(subDirPath, "S.gpg-agent")
+
+		// Prepare the file content
+		content := fmt.Sprintf("%%Assuan%%\nsocket=/run/user/%s/gnupg/%s/S.gpg-agent\n", uidStr, entry.Name())
+
+		// Write the file to the subdirectory
+		err := os.WriteFile(targetFilePath, []byte(content), 0644)
+		if err != nil {
+			fmt.Printf("Failed to write file %s: %v\n", targetFilePath, err)
+			continue
+		}
+
+		fmt.Printf("Created file: %s\n", targetFilePath)
+	}
+
+	return nil
+}
+
+func main() {
+	// Base directory to scan
+	baseDir := "/run/user"
+
+	// Call the function
+	err := writeGpgAgentFiles(baseDir)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+	} else {
+		fmt.Println("All S.gpg-agent files created successfully in subdirectories!")
+	}
+}
