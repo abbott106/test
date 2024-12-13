@@ -1,0 +1,68 @@
+package main
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+)
+
+func deleteGpgAgentFiles(baseDir string) error {
+	// Get the current user's UID
+	uid := os.Getuid()
+	uidStr := strconv.Itoa(uid)
+
+	// Construct the path to the gnupg directory
+	gnupgDir := filepath.Join(baseDir, uidStr, "gnupg")
+
+	// Check if the gnupg directory exists
+	if _, err := os.Stat(gnupgDir); os.IsNotExist(err) {
+		return fmt.Errorf("gnupg directory %s does not exist", gnupgDir)
+	}
+
+	// Read entries in the gnupg directory to find subdirectories
+	entries, err := os.ReadDir(gnupgDir)
+	if err != nil {
+		return fmt.Errorf("failed to read gnupg directory: %v", err)
+	}
+
+	for _, entry := range entries {
+		// Skip files; we only care about subdirectories
+		if !entry.IsDir() {
+			continue
+		}
+
+		// Construct the path to the S.gpg-agent file
+		targetFilePath := filepath.Join(gnupgDir, entry.Name(), "S.gpg-agent")
+
+		// Check if the file exists
+		if _, err := os.Stat(targetFilePath); os.IsNotExist(err) {
+			fmt.Printf("File does not exist: %s\n", targetFilePath)
+			continue
+		}
+
+		// Delete the file
+		err := os.Remove(targetFilePath)
+		if err != nil {
+			fmt.Printf("Failed to delete file %s: %v\n", targetFilePath, err)
+			continue
+		}
+
+		fmt.Printf("Deleted file: %s\n", targetFilePath)
+	}
+
+	return nil
+}
+
+func main() {
+	// Base directory to scan
+	baseDir := "/run/user"
+
+	// Call the function to delete the files
+	err := deleteGpgAgentFiles(baseDir)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+	} else {
+		fmt.Println("All S.gpg-agent files deleted successfully!")
+	}
+}
