@@ -1,0 +1,17 @@
+// Start the gpg-agent daemon with a custom socket
+socketDir := filepath.Join(tmpDir, "gpg-agent-socket")
+daemonDone := make(chan error)
+go runDaemon(gpgAgentPath, socketDir, daemonDone)
+
+// Wait for the daemon to initialize
+time.Sleep(2 * time.Second)
+
+// Set the GPG_AGENT_INFO environment variable
+socketPath := filepath.Join(socketDir, "S.gpg-agent")
+os.Setenv("GPG_AGENT_INFO", fmt.Sprintf("%s:0:1", socketPath))
+
+// Check if the daemon started successfully
+if err := <-daemonDone; err != nil {
+	fmt.Printf("Error starting gpg-agent daemon: %v\n", err)
+	return
+}
