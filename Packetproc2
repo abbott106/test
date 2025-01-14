@@ -1,0 +1,66 @@
+def packet_queue_processor():
+    with tempfile.TemporaryDirectory() as td:
+        while True:
+            # Ensure temporary directory exists
+            if not os.path.isdir(td):
+                log_info(f'Catcher Tmp directory seems to be missing, recreating {td}')
+                os.mkdir(td)
+            if DEBUG_MODE:
+                log_debug(f'Getting item from {msg_q.qsize()} item queue')
+            
+            # Get the next message from the queue
+            msg = msg_q.get()
+            fh = io.BytesIO(initial_bytes=msg)
+
+            with tarfile.open(fileobj=fh, mode=f'r:{TARBALL_OPTIONS}') as t:
+                j = json.loads(t.extractfile('json').read().decode())
+                parent_dir = f'{td}/{j["parent"]}'
+                chunk_dir = f'{parent_dir}/{j["chunk_uuid"]}'
+                unsplit_file = f'{parent_dir}/unsplit.tar.gz'
+                fec_file = f'{chunk_dir}/{j["file"]}'
+                unfec_file = f'{chunk_dir}.unfec'
+                handled_file_dir = f'{OUTPUT_DIR}/{parent_uuid}'
+
+                # Skip processing if conditions are met
+                if os.path.isfile(unfec_file) or os.path.isdir(handled_file_dir):
+                    continue
+
+                # Debug logging
+                if DEBUG_MODE:
+                    log_debug(j)
+
+                # Ensure directories exist
+                if not os.path.exists(parent_dir):
+                    if DEBUG_MODE:
+                        log_debug(f'Creating parent dir {parent_dir}')
+                    log_info(f'Processing new file request :: {j["parent"]}')
+                    os.mkdir(parent_dir)
+                    start_times[j["parent"]] = time.time()
+                    IN_PROGRESS_PARENT_UUIDS.append(j["parent"])
+
+                if not os.path.exists(chunk_dir):
+                    if DEBUG_MODE:
+                        log_debug(f'Creating chunk_dir {chunk_dir}')
+                    os.mkdir(chunk_dir)
+
+                # Write file
+                with open(fec_file, 'wb') as f:
+                    f.write(t.extractfile('data').read())
+
+                # Handle FEC files
+                with fec_lock:
+                    fecs = fec_files_in_dir(chunk_dir)
+
+                if DEBUG_MODE:
+                    log_debug(f'chunk dir {chunk_dir} has {len(fecs)} fec files of {j["k"]}/{j["m"]}')
+
+                if len(fecs) >= j["k"]:
+                    # Perform necessary actions with FEC files
+                    pass
+
+            # Cleanup chunk_dir if necessary
+            if os.path.exists(chunk_dir):
+                shutil.rmtree(chunk_dir)
+            # Cleanup parent_dir if necessary
+            if os.path.exists(parent_dir):
+                shutil.rmtree(parent_dir)
