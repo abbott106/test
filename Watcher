@@ -1,0 +1,48 @@
+#!/bin/bash
+
+# Folder to monitor
+MONITOR_DIR=$1
+
+# Check if the folder to monitor is provided
+if [ -z "$MONITOR_DIR" ]; then
+    echo "Usage: $0 <folder_to_monitor>"
+    exit 1
+fi
+
+# Check if the provided folder exists
+if [ ! -d "$MONITOR_DIR" ]; then
+    echo "Error: Directory '$MONITOR_DIR' does not exist."
+    exit 1
+fi
+
+echo "Monitoring folder: $MONITOR_DIR"
+echo "Press [Ctrl+C] to stop."
+
+# Initialize an associative array to track seen items
+declare -A seen_items
+
+# Populate the initial list of files and directories
+for item in "$MONITOR_DIR"/*; do
+    seen_items["$item"]=1
+done
+
+# Monitor the folder in a loop
+while true; do
+    # Check the directory for new files or directories
+    for item in "$MONITOR_DIR"/*; do
+        if [ ! -v seen_items["$item"] ]; then
+            if [ -d "$item" ]; then
+                echo "Directory created: $item"
+            elif [ -f "$item" ]; then
+                echo "File created: $item"
+            else
+                echo "Unknown item created: $item"
+            fi
+            # Mark this item as seen
+            seen_items["$item"]=1
+        fi
+    done
+
+    # Sleep to avoid excessive CPU usage
+    sleep 1
+done
