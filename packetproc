@@ -1,0 +1,66 @@
+def packet_queue_processor():
+  with tempfile.TemporaryDirectory() as td:
+    while True:
+        if not os.path.isdir(td):
+            log_info(f'Catcher Tmp directory seems to be missing, recreating {td}')
+            os.mkdir(td)
+        if DEBUG_MODE:
+            log_debug(f'getting item from {msg_q.qsize()} item queue')
+        msg = msg_q.get()
+        fh = io.BytesIO(initial_bytes=msg)
+
+        with tarfile.open(fileobj=fh, mode=f'r:{TARBALL_OPTIONS}') as t:
+            j = json.loads(t.extractfile('json').read().decode())
+            parent_dir = f'{td}/{j["parent"]}'
+            parent_uuid = j['parent']
+            chunk_dir = f'{parent_dir}/{j["chunk_uuid"]}'
+            unsplit_file = f'{parent_dir}/unsplit.tar.gz'
+            fec_file = f'{chunk_dir}/{j["file"]}'
+            unfec_file = f'{chunk_dir}.unfec'
+            handled_file_dir = f'{OUTPUT_DIR}/{parent_uuid}'
+    
+            if os.path.isfile(unfec_file):
+                continue
+            if os.path.isdir(handled_file_dir):
+                continue
+
+            if DEBUG_MODE:
+                log_debug(j)
+                log_debug(f'[Parent] {j["parent"]}')
+                log_debug(f'    [Chunk]   {j["chunk_uuid"]} | {j["chunk_size"]}B')
+                log_debug(f'    [Type]    {j["type"]}')
+                log_debug(f'    [UUID]    {j["uuid"]}')
+                log_debug(f'    [k]       {j["k"]}')
+                log_debug(f'    [m]       {j["m"]}')
+                log_debug(f'    [FEC]     {fec_file} | {j["size"]}B')
+
+            if not os.path.exists(parent_dir):
+                if DEBUG_MODE:
+                    log_debug(f'Creating parent dir {parent_dir}')
+                log_info(f'Processing new file request :: {j["parent"]}')
+                if not os.path.isdir(td):
+                    log_info(f'Catcher Tmp directory seems to be missing, recreating {td}')
+                    os.mkdir(td)
+                os.mkdir(parent_dir)
+                start_times[parent_uuid] = time.time()
+                IN_PROGRESS_PARENT_UUIDS.append(parent_uuid)
+
+            if not os.path.exists(chunk_dir):
+                if DEBUG_MODE:
+                    log_debug(f'Creating chunk_dir dir {chunk_dir}')
+                os.mkdir(chunk_dir)
+
+            with open(fec_file,'wb') as f:
+                f.write(t.extractfile('data').read())
+                f.close()
+
+            with fec_lock:
+                fecs = fec_files_in_dir(chunk_dir)
+            '''
+            fecs = fec_files_in_dir(chunk_dir)
+            '''
+
+            if DEBUG_MODE:
+                log_debug(f'chunk dir {chunk_dir} has {len(fecs)} fec files of {j["k"]}/{j["m"]}')
+
+            if len(fecs) >= j["k"]:
