@@ -1,0 +1,57 @@
+def validate_certs(self, file_path, file_name):
+         certTmp = tempfile.NamedTemporaryFile(delete=False)
+         crlTmp = tempfile.NamedTemporaryFile(delete=False)
+
+         try:
+             huge_parser = ET.XMLParser(huge_tree=True)
+             xml = ET.parse(file_path, huge_parser)
+             content = xml.getroot()
+
+             """
+             check if crls exists and if all sub crl elements have text that isnt whitespace
+             """
+             crls = content.find('cds_payload').find('headvalidation').find('crls')
+             if crls is None or not any(crl.text and crl.text.strip() for crl in crls if crl.tag.startswith("crl")):
+                log_error(f'{file_name} crl field is empty or doesnt exist')
+                return False  
+
+             ticket_num = file_name[3:-11]
+
+             for certificate in content:
+                 if certificate.tag.startswith("certificate"):
+                     cert = certificate.find('cds_payload').find("content").text
+
+                     with open(certTmp.name, "w") as certFile:
+                         certFile.write(cert)
+                         certFile.close()
+
+                         for child_crl in crls:
+                             if child_crl.tag.startswith("crl"):
+                                 crl = child_crl.text
+
+                                 with open(crlTmp.name, "w") as crlFile:
+                                     crlFile.write(crl)
+                                     crlFile.close()
+
+                                     try:
+                                         validity = is_certificate_valid(
+                                             ticket_number=ticket_num, 
+                                             cert_pem_path=certFile.name, 
+                                             crl_pem_path=crlFile.name
+                                         )
+
+                                         if not validity:  
+                                             os.remove(certFile.name)
+                                             os.remove(crlFile.name)  
+                                             return False
+
+                                     except Exception as e:
+                                         raise(e)
+
+                                     os.remove(crlFile.name)
+                         os.remove(certFile.name)
+             return True
+         except Exception as e:
+             log_error(f"failed to validate {file_path}")
+             log_error(e)
+             return False   
