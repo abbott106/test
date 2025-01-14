@@ -1,0 +1,73 @@
+def validate_certs(self, file_path, file_name):
+    certTmp = tempfile.NamedTemporaryFile(delete=False)
+    crlTmp = tempfile.NamedTemporaryFile(delete=False)
+
+    try:
+        huge_parser = ET.XMLParser(huge_tree=True)
+        xml = ET.parse(file_path, huge_parser)
+        content = xml.getroot()
+
+        # Check if crls exists and if all sub-crl elements have non-whitespace text
+        try:
+            crls = content.find('cds_payload').find('headvalidation').find('crls')
+            if crls is None or not any(crl.text and crl.text.strip() for crl in crls if crl.tag.startswith("crl")):
+                log_error(f"{file_name} crl field is empty or doesn't exist")
+                return False
+        except Exception as e:
+            log_error(f"{file_name} failed while validating CRLs: {e}")
+            return False
+
+        ticket_num = file_name[3:-11]
+
+        for certificate in content:
+            try:
+                # Ensure certificate starts with "certificate" and has a valid "content" tag
+                if certificate.tag.startswith("certificate"):
+                    content_tag = certificate.find('cds_payload').find("content")
+                    if content_tag is None or not content_tag.text or not content_tag.text.strip():
+                        log_error(f"{file_name} certificate content field is empty or missing")
+                        return False
+
+                    cert = content_tag.text
+
+                    # Write certificate content to temp file
+                    with open(certTmp.name, "w") as certFile:
+                        certFile.write(cert)
+
+                    # Process CRLs for this certificate
+                    for child_crl in crls:
+                        try:
+                            if child_crl.tag.startswith("crl"):
+                                crl = child_crl.text
+
+                                # Write CRL content to temp file
+                                with open(crlTmp.name, "w") as crlFile:
+                                    crlFile.write(crl)
+
+                                # Validate the certificate using the CRL
+                                validity = is_certificate_valid(
+                                    ticket_number=ticket_num,
+                                    cert_pem_path=certTmp.name,
+                                    crl_pem_path=crlTmp.name,
+                                )
+
+                                if not validity:
+                                    log_error(f"{file_name} certificate validation failed")
+                                    return False
+                        except Exception as crl_error:
+                            log_error(f"Error processing CRL: {crl_error}")
+                            return False
+            except Exception as cert_error:
+                log_error(f"Error processing certificate: {cert_error}")
+                return False
+    except Exception as e:
+        log_error(f"Failed to validate {file_path}: {e}")
+        return False
+    finally:
+        # Clean up temporary files
+        if os.path.exists(certTmp.name):
+            os.remove(certTmp.name)
+        if os.path.exists(crlTmp.name):
+            os.remove(crlTmp.name)
+
+    return True
