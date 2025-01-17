@@ -1,0 +1,23 @@
+<div class="set-form">
+      <table class="icmp_table table-bordered">
+        <thead>
+          <tr>
+            <th>MTU Size</th>
+            <th>Interval (Seconds)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <textarea name="Question" placeholder="Question" th:field="${questionAnswerSet.question}" id="question" style="resize: none; width: 100%;"></textarea>
+            </td>
+            <td>
+              <textarea name="Answer" placeholder="Answer" th:field="${questionAnswerSet.answer}" id="answer" style="resize: none; width: 100%;"></textarea>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="set-form">
+      <input type="button" id="more_fields" onclick="add_fields();" value="Add More" class="btn btn-info" />
+    </div>
