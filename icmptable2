@@ -1,0 +1,29 @@
+<div class="set-form">
+      <table class="icmp_table table-bordered">
+        <thead>
+          <tr>
+            <th>MTU Size</th>
+            <th>Interval (Seconds)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <textarea name="mtu_size" placeholder="Packet Size" th:field="${icmpTaskSet.mtu_size}" id="mtu_size" style="resize: none; width: 100%;"></textarea>
+            </td>
+            <td>
+              <textarea name="test_interval" placeholder="Test Interval" th:field="${icmpTaskSet.test_interval}" id="test_interval" style="resize: none; width: 100%;"></textarea>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="set-form">
+      <input type="button" id="more_fields" onclick="add_fields();" value="Add Test" class="btn btn-info" />
+    </div>
+
+
+function add_fields() {
+    document.getElementsByClassName('icmp_table')[0].getElementsByTagName('tbody')[0].innerHTML += '<tr><td><textarea name="mtu_size" placeholder="Packet Size" th:field="${icmpTaskSet.mtu_size}" id="mtu_size" style="resize: none; width: 100%;"></textarea></td><td><textarea name="test_interval" placeholder="Test Interval" th:field="${questionAnswerSet.test_interval}" id="test_interval" style="resize: none; width: 100%;"></textarea></td></tr>';
+  }
+
