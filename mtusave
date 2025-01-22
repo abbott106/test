@@ -1,0 +1,74 @@
+<div class="set-form">
+  <table class="icmp_table table-bordered">
+    <thead>
+      <tr>
+        <th>MTU Size</th>
+        <th>Interval (Seconds)</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="icmp_table_body">
+      <tr>
+        <td>
+          <textarea name="mtu_size" placeholder="Packet Size" style="resize: none; width: 100%;"></textarea>
+        </td>
+        <td>
+          <textarea name="test_interval" placeholder="Test Interval" style="resize: none; width: 100%;"></textarea>
+        </td>
+        <td>
+          <button type="button" class="btn btn-danger" onclick="deleteRow(this)">Delete</button>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="set-form">
+  <input type="button" id="more_fields" onclick="add_fields();" value="Add Test" class="btn btn-info" />
+  <input type="button" id="save_table" onclick="saveTable();" value="Save" class="btn btn-success" />
+</div>
+
+<script>
+  function deleteRow(button) {
+    var row = button.closest("tr");
+    row.remove();
+  }
+
+  function add_fields() {
+    var tableBody = document.getElementById("icmp_table_body");
+
+    var newRow = document.createElement("tr");
+    newRow.innerHTML = `
+      <td>
+        <textarea name="mtu_size" placeholder="Packet Size" style="resize: none; width: 100%;"></textarea>
+      </td>
+      <td>
+        <textarea name="test_interval" placeholder="Test Interval" style="resize: none; width: 100%;"></textarea>
+      </td>
+      <td>
+        <button type="button" class="btn btn-danger" onclick="deleteRow(this)">Delete</button>
+      </td>
+    `;
+
+    tableBody.appendChild(newRow);
+  }
+
+  function saveTable() {
+    var tableBody = document.getElementById("icmp_table_body");
+    var rows = tableBody.getElementsByTagName("tr");
+    var data = [];
+
+    for (var i = 0; i < rows.length; i++) {
+      var mtuValue = rows[i].querySelector("textarea[name='mtu_size']").value.trim();
+      var intervalValue = rows[i].querySelector("textarea[name='test_interval']").value.trim();
+
+      if (mtuValue && intervalValue) { // Only save rows with data
+        data.push({ mtu_size: mtuValue, test_interval: intervalValue });
+      }
+    }
+
+    console.log(data); // For debugging, logs values to the console
+
+    // You can now send `data` to the backend using fetch or AJAX if needed
+  }
+</script>
