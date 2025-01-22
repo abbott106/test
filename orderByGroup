@@ -1,0 +1,32 @@
+import sqlite3  # Use psycopg2 for PostgreSQL or mysql.connector for MySQL
+
+def get_organized_icmp_tasks(db_connection):
+    """
+    Fetches all ICMP tasks from the database and organizes them by group_id.
+    Returns a dictionary where each key is a group_id and the value is a list of tasks.
+    """
+    cursor = db_connection.cursor()
+
+    # Fetch all ICMP tasks from the database
+    cursor.execute("SELECT group_id, mtu_size, interval_seconds FROM icmp_tests ORDER BY group_id")
+    rows = cursor.fetchall()
+
+    # Organize data by group_id
+    grouped_tasks = {}
+    for group_id, mtu_size, interval_seconds in rows:
+        if group_id not in grouped_tasks:
+            grouped_tasks[group_id] = []
+        grouped_tasks[group_id].append({"mtu_size": mtu_size, "interval_seconds": interval_seconds})
+
+    cursor.close()
+    return grouped_tasks
+
+# Example usage
+if __name__ == "__main__":
+    db_conn = sqlite3.connect("icmp_tests.db")  # Replace with actual DB connection
+    icmp_tasks = get_organized_icmp_tasks(db_conn)
+    db_conn.close()
+
+    # Print organized tasks (nicely formatted)
+    import json
+    print(json.dumps(icmp_tasks, indent=4))
