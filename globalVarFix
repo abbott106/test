@@ -1,0 +1,33 @@
+<script>
+  var tbl = null;
+  var selectedGroupName = null;
+  var selectedGroupId = null;
+  var selectedTasks = null;
+  var selectedSites = null;
+  var sites_multi_select = null;
+  var selected_sites_multi_select = null;
+  var all_tasks = null; // ✅ Declare globally
+
+  $(document).ready(function () {
+    // Fetch sites and populate dropdowns
+    $.getJSON("/api/sites", function (sites) {
+      console.log("The sites are", sites);
+      var $dropdown = $("#sites");
+      var $selected_dropdown = $("#selected_group_sites");
+
+      $.each(sites.data, function () {
+        $dropdown.append($("<option />").val(this.id).text(this.name));
+        $selected_dropdown.append($("<option />").val(this.id).text(this.name));
+      });
+
+      sites_multi_select = $dropdown.filterMultiSelect();
+      selected_sites_multi_select = $selected_dropdown.filterMultiSelect();
+    });
+
+    // ✅ Fetch all tasks and store them globally
+    $.getJSON("/api/allTasks", function (tasks) {
+      all_tasks = tasks; // ✅ Store globally
+      console.log("All tasks stored globally:", all_tasks);
+    });
+  });
+</script>
