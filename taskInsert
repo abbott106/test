@@ -1,0 +1,65 @@
+import sqlite3  # Use your database driver (e.g., psycopg2 for PostgreSQL, MySQL connector, etc.)
+
+def sync_mtu_interval_data(db_connection, group_id, new_data):
+    """
+    Synchronizes the database with the provided mtu_size and test_interval data.
+    
+    - Deletes records from the database if they are not in new_data.
+    - Inserts new records if they are not in the database.
+    - Leaves existing records unchanged.
+
+    :param db_connection: SQLite, MySQL, or PostgreSQL connection object.
+    :param group_id: The group identifier to match records.
+    :param new_data: A list of dictionaries with 'mtu_size' and 'test_interval'.
+    """
+    
+    cursor = db_connection.cursor()
+
+    # Fetch existing records from the database for the given group_id
+    cursor.execute("SELECT mtu_size, test_interval FROM icmp_tests WHERE group_id = ?", (group_id,))
+    existing_data = {tuple(row) for row in cursor.fetchall()}  # Convert to set of tuples for easy comparison
+
+    # Convert new data to a set of tuples for comparison
+    new_data_set = {(entry["mtu_size"], entry["test_interval"]) for entry in new_data}
+
+    # Determine records to delete (in DB but not in new data)
+    to_delete = existing_data - new_data_set
+
+    # Determine records to insert (in new data but not in DB)
+    to_insert = new_data_set - existing_data
+
+    # Delete records that are no longer needed
+    if to_delete:
+        cursor.executemany(
+            "DELETE FROM icmp_tests WHERE group_id = ? AND mtu_size = ? AND test_interval = ?",
+            [(group_id, mtu, interval) for mtu, interval in to_delete]
+        )
+
+    # Insert new records
+    if to_insert:
+        cursor.executemany(
+            "INSERT INTO icmp_tests (group_id, mtu_size, test_interval) VALUES (?, ?, ?)",
+            [(group_id, mtu, interval) for mtu, interval in to_insert]
+        )
+
+    # Commit changes
+    db_connection.commit()
+    cursor.close()
+
+# Example usage:
+if __name__ == "__main__":
+    # Connect to the database
+    db_conn = sqlite3.connect("icmp_tests.db")  # Change this to your database connection
+
+    # Example new data coming from the frontend
+    new_mtu_interval_data = [
+        {"mtu_size": "1500", "test_interval": "30"},
+        {"mtu_size": "1400", "test_interval": "60"}
+    ]
+
+    group_id = 1  # Replace with the actual group_id
+
+    sync_mtu_interval_data(db_conn, group_id, new_mtu_interval_data)
+
+    # Close the database connection
+    db_conn.close()
