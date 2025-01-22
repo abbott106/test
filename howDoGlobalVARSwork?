@@ -1,0 +1,37 @@
+<script>
+  var tbl = null
+  var selectedGroupName = null;
+  var selectedGroupId = null;
+  var selectedTasks = null;
+  var selectedSites = null;
+  var sites_multi_select = null;
+  var selected_sites_multi_select = null;
+  
+</script>
+
+<script src="/static/js/filter-multi-select-bundle.min.js"></script>
+<script>
+
+  
+  $('document').ready(function () {
+    $.getJSON("/api/sites", function (sites) {
+      console.log('the sites are', sites)
+      var $dropdown = $("#sites");
+      var $selected_dropdown = $("#selected_group_sites");
+      $.each(sites.data, function () {
+        $dropdown.append($("<option />").val(this.id).text(this.name));
+        $selected_dropdown.append($("<option />").val(this.id).text(this.name));
+      });
+      sites_multi_select = $dropdown.filterMultiSelect();
+      selected_sites_multi_select = $selected_dropdown.filterMultiSelect();
+    });
+  });
+  $('document').ready(function () {
+    $.getJSON("/api/allTasks", function (tasks) {
+      console.log('the tasks are', tasks)
+      var all_tasks = tasks;
+      console.log(all_tasks)
+    });
+    //var all_tasks = $("#tasks");
+
+  });
