@@ -1,0 +1,107 @@
+<div class="set-form">
+  <table class="icmp_table table-bordered">
+    <thead>
+      <tr>
+        <th>MTU Size</th>
+        <th>Interval (Seconds)</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="icmp_table_body">
+      <!-- Data will be populated here dynamically -->
+    </tbody>
+  </table>
+</div>
+
+<div class="set-form">
+  <input type="button" id="icmpTasks" onclick="fetchAndPopulateTable();" value="Load ICMP Tasks" class="btn btn-primary" />
+  <input type="button" id="more_fields" onclick="add_fields();" value="Add Test" class="btn btn-info" />
+  <input type="button" id="save_table" onclick="saveTable();" value="Save" class="btn btn-success" />
+</div>
+
+<script>
+  const apiUrl = "https://your-api.com/get-icmp-tasks"; // Replace with your actual API URL
+
+  function fetchAndPopulateTable() {
+    const groupId = getGroupId(); // Assume you have a function to get groupId
+    fetch(`${apiUrl}?group_id=${groupId}`)
+      .then(response => response.json())
+      .then(data => populateTable(data))
+      .catch(error => console.error("Error fetching ICMP tasks:", error));
+  }
+
+  function populateTable(data) {
+    const tableBody = document.getElementById("icmp_table_body");
+    tableBody.innerHTML = ""; // Clear previous data
+
+    data.forEach(task => {
+      const newRow = document.createElement("tr");
+      newRow.innerHTML = `
+        <td>
+          <textarea name="mtu_size" placeholder="Packet Size" style="resize: none; width: 100%;">${task.mtu_size}</textarea>
+        </td>
+        <td>
+          <textarea name="test_interval" placeholder="Test Interval" style="resize: none; width: 100%;">${task.test_interval}</textarea>
+        </td>
+        <td>
+          <button type="button" class="btn btn-danger" onclick="deleteRow(this)">Delete</button>
+        </td>
+      `;
+      tableBody.appendChild(newRow);
+    });
+  }
+
+  function deleteRow(button) {
+    var row = button.closest("tr");
+    row.remove();
+  }
+
+  function add_fields() {
+    const tableBody = document.getElementById("icmp_table_body");
+    const newRow = document.createElement("tr");
+
+    newRow.innerHTML = `
+      <td>
+        <textarea name="mtu_size" placeholder="Packet Size" style="resize: none; width: 100%;"></textarea>
+      </td>
+      <td>
+        <textarea name="test_interval" placeholder="Test Interval" style="resize: none; width: 100%;"></textarea>
+      </td>
+      <td>
+        <button type="button" class="btn btn-danger" onclick="deleteRow(this)">Delete</button>
+      </td>
+    `;
+    tableBody.appendChild(newRow);
+  }
+
+  function saveTable() {
+    const tableBody = document.getElementById("icmp_table_body");
+    const rows = tableBody.getElementsByTagName("tr");
+    const groupId = getGroupId(); // Assume this function exists
+    const data = [];
+
+    for (let row of rows) {
+      let mtuValue = row.querySelector("textarea[name='mtu_size']").value.trim();
+      let intervalValue = row.querySelector("textarea[name='test_interval']").value.trim();
+
+      if (mtuValue && intervalValue) {
+        data.push({ mtu_size: mtuValue, test_interval: intervalValue });
+      }
+    }
+
+    console.log(data); // Debugging
+
+    fetch("https://your-api.com/save-icmp-tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ group_id: groupId, tasks: data })
+    })
+    .then(response => response.json())
+    .then(result => console.log("Saved successfully:", result))
+    .catch(error => console.error("Error saving data:", error));
+  }
+
+  function getGroupId() {
+    return "1"; // Replace with actual logic to get group_id dynamically
+  }
+</script>
