@@ -1,0 +1,35 @@
+def updateTasks(self, group_id, new_data):
+    try:
+        # Fetch existing records from the database for the given group_id
+        self.cur.execute("SELECT mtu, interval_seconds FROM icmp_tasks WHERE group_id = ?", (group_id,))
+        existing_data = {tuple(row) for row in self.cur.fetchall()}  # Store as set of tuples
+
+        # Convert new data to a set of tuples for comparison
+        new_data_set = {(entry["mtu_size"], entry["test_interval"]) for entry in new_data}
+
+        # ✅ Determine records to delete (exists in DB but not in new data)
+        to_delete = existing_data - new_data_set
+
+        # ✅ Determine records to insert (exists in new data but not in DB)
+        to_insert = new_data_set - existing_data
+
+        # ✅ Delete only extra records (Does NOT delete records that are still needed)
+        if to_delete:
+            self.cur.executemany(
+                "DELETE FROM icmp_tasks WHERE group_id = ? AND mtu = ? AND interval_seconds = ?",
+                [(group_id, mtu, interval) for mtu, interval in to_delete]
+            )
+
+        # ✅ Insert only missing records (Does NOT insert already existing records)
+        if to_insert:
+            self.cur.executemany(
+                "INSERT INTO icmp_tasks (group_id, mtu, interval_seconds) VALUES (?, ?, ?)",
+                [(group_id, mtu, interval) for mtu, interval in to_insert]
+            )
+
+        # Commit changes
+        self.con.commit()
+
+    except Exception as e:
+        log_error(f"Failed to update ICMP tasks for {group_id}: {str(e)}")
+        raise e
