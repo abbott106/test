@@ -1,0 +1,12 @@
+def run(self):
+      tasks_in_progress = []
+      while True:
+        #check if there are any entries in icmp_tasks sql table 
+          # check if unix time now - interval > last_time_completed and if that test_id is not in tasks_in_progress 
+            # start thread for icmp task 
+              # task_in_progress.append(task_id)
+              # run icmp task(task_id)
+              # set last_time_completed to current unix time
+              # once finished remove the task_id from in progress
+               
+        time.sleep(1)
