@@ -1,0 +1,73 @@
+#site_ping = {site1:(site2, site3, site4), site2:(site1, site3, site4), site3:(site1, site2, site4), site4:(site1, site2, site3)}
+from amp_db import AMPDB 
+import threading
+import time
+
+class ICMPTaskRunner:
+    def __init__(self):
+    
+        self.tasks_in_progress = []  # Tracks running tasks
+        self.lock = threading.Lock()  # Prevents race conditions
+        self.con, self.cur = AMPDB().new()
+
+    def run(self):
+        """Main loop that continuously checks and runs ICMP tasks."""
+        while True:
+            try:
+                tasks = self.get_pending_tasks()  # Fetch tasks from DB
+                for task in tasks:
+                    task_id, interval, last_completed = task
+
+                    # Check if task should run (interval elapsed + not already running)
+                    current_time = int(time.time())  # Current UNIX timestamp
+                    if (current_time - last_completed >= interval) and (task_id not in self.tasks_in_progress):
+                        self.start_icmp_task(task_id)
+
+                time.sleep(1)  # Prevents excessive DB queries
+
+            except Exception as e:
+                print(f"Error in main loop: {e}")
+
+    def get_pending_tasks(self):
+        """Fetch all ICMP tasks from the database."""
+        
+        
+        self.cur.execute("SELECT task_id, interval_seconds, last_time_completed FROM icmp_tasks")
+        tasks = self.cur.fetchall()
+        self.con.close()
+        return tasks  # Returns list of tuples: [(task_id, interval, last_completed), ...]
+
+    def start_icmp_task(self, task_id):
+        """Start an ICMP task in a new thread."""
+        with self.lock:
+            self.tasks_in_progress.append(task_id)
+
+        thread = threading.Thread(target=self.run_icmp_task, args=(task_id,))
+        thread.start()
+
+    def run_icmp_task(self, task_id):
+        """Runs the actual ICMP task and updates the database upon completion."""
+        try:
+            print(f"Starting ICMP task: {task_id}")
+            time.sleep(5)  # Simulate ICMP test temp
+
+            current_time = int(time.time())
+            self.update_task_completion_time(task_id, current_time)
+
+        except Exception as e:
+            print(f"Error running ICMP task {task_id}: {e}")
+
+        finally:
+            with self.lock:
+                if task_id in self.tasks_in_progress:
+                    self.tasks_in_progress.remove(task_id)
+            print(f"ICMP task {task_id} completed.")
+
+    def update_task_completion_time(self, task_id, timestamp):
+        """Updates last_time_completed for a task in the database."""
+        
+        self.cur.execute("UPDATE icmp_tasks SET last_time_completed = ? WHERE task_id = ?", (timestamp, task_id))
+        self.con.commit()
+        self.con.close()
+
+
