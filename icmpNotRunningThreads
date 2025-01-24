@@ -1,0 +1,84 @@
+#site_ping = {site1:(site2, site3, site4), site2:(site1, site3, site4), site3:(site1, site2, site4), site4:(site1, site2, site3)}
+
+
+from amp_db import AMPDB
+import threading
+import time
+import uuid
+from log_logger import log_info, log_error, log_debug
+
+class ICMPTaskRunner:
+    def __init__(self):
+        self.tasks_in_progress = []  # Tracks running tasks
+        self.lock = threading.Lock()  # Prevents race conditions
+         
+
+    def run(self):
+    
+        
+        while True:
+            try:
+                
+                tasks = self.get_pending_tasks()  # Fetch tasks from DB
+                for task in tasks:
+                    task_id, interval, last_completed = task
+
+                    # Check if task should run (interval elapsed + not already running)
+                    current_time = int(time.time())  # Current UNIX timestamp
+                    log_info(f'tasks in progress are {self.tasks_in_progress}')
+                    log_info(f'current time - last_completed is  {current_time - last_completed} interval is {interval} for no {task_id}')
+                    if task_id in self.tasks_in_progress:
+                        log_info(f'task no. {task_id} in progress skipping')
+                    if (current_time - last_completed >= interval) and (task_id not in self.tasks_in_progress):
+                        self.tasks_in_progress.append(task_id)
+                        log_info(f"after appending work to do is now {self.tasks_in_progress}")
+                        threadname = uuid.uuid4()
+                        log_info(f'starting thread {threadname}, on task no. {task_id}')
+                        threadname = threading.Thread(target=self.run_icmp_task(task_id)) 
+                        threadname.daemon = True
+                        threadname.start()
+                    else:
+                        log_info(f'skipping {task_id} for now')
+
+                time.sleep(1)  
+                
+
+            except Exception as e:
+                print(f"Error in main loop: {e}")
+    
+
+    def get_pending_tasks(self):
+        """Fetch all ICMP tasks from the database."""
+        con, cur = AMPDB().new()
+        cur.execute("SELECT id, interval_seconds, last_time_completed FROM icmp_tasks")
+        
+        return cur.fetchall()  
+
+    
+
+    def run_icmp_task(self, task_id):
+        try:
+            log_info(f"Starting ICMP task: {task_id}")
+            time.sleep(10)  
+            current_time = int(time.time())
+            self.update_task_completion_time(task_id, current_time)
+
+        except Exception as e:
+            log_error(f"Error running ICMP task {task_id}: {e}")
+
+        finally:
+            with self.lock:
+                if task_id in self.tasks_in_progress:
+                    self.tasks_in_progress.remove(task_id)
+            log_info(f"ICMP task {task_id} completed.")
+
+    def update_task_completion_time(self, task_id, timestamp):
+        """Updates last_time_completed for a task in the database."""
+        con, cur = AMPDB().new()  
+        try:
+            cur.execute("UPDATE icmp_tasks SET last_time_completed = ? WHERE id = ?", (timestamp, task_id))
+            con.commit()
+        except Exception as e:
+            print(f"Error updating ICMP task {task_id}: {e}")
+        finally:
+            con.close()  
