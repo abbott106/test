@@ -1,0 +1,50 @@
+import paramiko
+import concurrent.futures
+
+# List of site IPs
+sites = ["192.168.1.1", "192.168.1.2", "192.168.1.3", "192.168.1.4"]  # Replace with actual site IPs
+
+# SSH credentials
+USERNAME = "your_username"
+PASSWORD = "your_password"
+
+# Function to execute a ping test from a remote site
+def run_ping_test(source_ip, target_ip):
+    try:
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect(source_ip, username=USERNAME, password=PASSWORD, timeout=5)
+        
+        # Command to ping the target
+        command = f"ping -c 4 {target_ip}"
+        stdin, stdout, stderr = client.exec_command(command)
+        
+        output = stdout.read().decode()
+        error = stderr.read().decode()
+        
+        client.close()
+        
+        return f"From {source_ip} to {target_ip}:\n{output if output else error}"
+    
+    except Exception as e:
+        return f"Failed to ping from {source_ip} to {target_ip}: {str(e)}"
+
+# Function to run all pings from a given site in parallel
+def run_pings_from_site(source_ip, sites):
+    results = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        future_to_target = {executor.submit(run_ping_test, source_ip, target_ip): target_ip for target_ip in sites if target_ip != source_ip}
+        for future in concurrent.futures.as_completed(future_to_target):
+            results.append(future.result())
+    return results
+
+# Run all pings in parallel for all sites
+def run_all_pings(sites):
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        future_to_source = {executor.submit(run_pings_from_site, source_ip, sites): source_ip for source_ip in sites}
+        for future in concurrent.futures.as_completed(future_to_source):
+            for result in future.result():
+                print(result)
+
+if __name__ == "__main__":
+    run_all_pings(sites)
