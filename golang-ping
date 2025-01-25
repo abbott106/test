@@ -1,0 +1,85 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/exec"
+	"strings"
+	"sync"
+)
+
+// PingResult holds the result of a ping test
+type PingResult struct {
+	IP      string `json:"ip"`
+	Success bool   `json:"success"`
+	Output  string `json:"output,omitempty"`
+	Error   string `json:"error,omitempty"`
+}
+
+// pingIP executes a ping command for a given IP and MTU size
+func pingIP(ip string, mtu int, wg *sync.WaitGroup, results chan<- PingResult) {
+	defer wg.Done()
+
+	packetSize := mtu - 28 // Subtract ICMP header size
+	cmd := exec.Command("ping", "-M", "do", "-s", fmt.Sprintf("%d", packetSize), "-c", "4", ip)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		results <- PingResult{
+			IP:      ip,
+			Success: false,
+			Error:   strings.TrimSpace(err.Error()),
+		}
+		return
+	}
+
+	results <- PingResult{
+		IP:      ip,
+		Success: true,
+		Output:  strings.TrimSpace(string(output)),
+	}
+}
+
+func main() {
+	if len(os.Args) < 3 {
+		fmt.Println("Usage: go run main.go <mtu> <ip1> <ip2> ...")
+		return
+	}
+
+	// Parse command-line arguments
+	mtu := os.Args[1]
+	ips := os.Args[2:]
+
+	results := make(chan PingResult, len(ips))
+	var wg sync.WaitGroup
+
+	// Ping all IPs concurrently
+	for _, ip := range ips {
+		wg.Add(1)
+		go pingIP(ip, atoi(mtu), &wg, results)
+	}
+
+	wg.Wait()
+	close(results)
+
+	// Collect results and format as JSON
+	var output []PingResult
+	for result := range results {
+		output = append(output, result)
+	}
+
+	jsonOutput, err := json.MarshalIndent(output, "", "    ")
+	if err != nil {
+		fmt.Println("Error generating JSON:", err)
+		return
+	}
+
+	fmt.Println(string(jsonOutput))
+}
+
+// atoi safely converts a string to an integer
+func atoi(s string) int {
+	val, _ := strconv.Atoi(s)
+	return val
+}
