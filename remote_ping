@@ -1,0 +1,40 @@
+import argparse
+import subprocess
+import json
+
+def ping_ip(ip, mtu):
+    """Pings an IP with a specific MTU size and returns the result in JSON format."""
+    try:
+        # Compute packet size based on MTU (subtracting ICMP headers)
+        packet_size = mtu - 28  # Standard ICMP header is 28 bytes
+
+        # Linux ping command with no fragmentation (-M do) and specified packet size (-s)
+        command = ["ping", "-M", "do", "-s", str(packet_size), "-c", "4", ip]
+
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5)
+
+        return {
+            "ip": ip,
+            "success": result.returncode == 0,
+            "output": result.stdout.strip(),
+            "error": result.stderr.strip()
+        }
+
+    except subprocess.TimeoutExpired:
+        return {"ip": ip, "success": False, "error": "Ping timed out"}
+    except Exception as e:
+        return {"ip": ip, "success": False, "error": str(e)}
+
+def main():
+    parser = argparse.ArgumentParser(description="Ping multiple IPs with a specified MTU size and output JSON results.")
+    parser.add_argument("mtu", type=int, help="MTU size for the ping test.")
+    parser.add_argument("ips", nargs="+", help="List of IP addresses to ping.")
+
+    args = parser.parse_args()
+
+    results = [ping_ip(ip, args.mtu) for ip in args.ips]
+
+    print(json.dumps(results, indent=4))
+
+if __name__ == "__main__":
+    main()
