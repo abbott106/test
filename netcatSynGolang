@@ -1,0 +1,85 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"net"
+	"os"
+	"sync"
+	"time"
+	"strconv"
+)
+
+// PingResult stores the result of a TCP connection test
+type PingResult struct {
+	IP      string `json:"ip"`
+	Port    int    `json:"port"`
+	Success bool   `json:"success"`
+	Error   string `json:"error,omitempty"`
+}
+
+// tcpPing attempts to connect to an IP and port using TCP
+func tcpPing(ip string, port int, wg *sync.WaitGroup, results chan<- PingResult) {
+	defer wg.Done()
+
+	address := fmt.Sprintf("%s:%d", ip, port)
+	conn, err := net.DialTimeout("tcp", address, 3*time.Second)
+
+	if err != nil {
+		results <- PingResult{
+			IP:      ip,
+			Port:    port,
+			Success: false,
+			Error:   err.Error(),
+		}
+		return
+	}
+
+	conn.Close() // Close successful connection
+
+	results <- PingResult{
+		IP:      ip,
+		Port:    port,
+		Success: true,
+	}
+}
+
+func main() {
+	if len(os.Args) < 3 {
+		fmt.Println("Usage: go run main.go <port> <ip1> <ip2> ...")
+		return
+	}
+
+	port := atoi(os.Args[1])
+	ips := os.Args[2:]
+
+	results := make(chan PingResult, len(ips))
+	var wg sync.WaitGroup
+
+	for _, ip := range ips {
+		wg.Add(1)
+		go tcpPing(ip, port, &wg, results)
+	}
+
+	wg.Wait()
+	close(results)
+
+	var output []PingResult
+	for result := range results {
+		output = append(output, result)
+	}
+
+	jsonOutput, err := json.MarshalIndent(output, "", "    ")
+	if err != nil {
+		fmt.Println("Error generating JSON:", err)
+		return
+	}
+
+	fmt.Println(string(jsonOutput))
+}
+
+// Converts a string to an integer safely
+func atoi(s string) int {
+	val, _ := strconv.Atoi(s)
+	return val
+}
