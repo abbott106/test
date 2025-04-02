@@ -1,0 +1,93 @@
+import requests
+import csv
+import argparse
+from collections import defaultdict
+
+# Mapping from perspectives to SonarQube tags
+PERSPECTIVE_TAGS = {
+    "Sonar": None,  # all issues
+    "PCI DSS": "pci-dss",
+    "OWASP": "owasp",
+    "CWE": "cwe",
+    "STIG": "stig",
+    "CASA": "casa",
+}
+
+def get_issues(base_url, project_key, token=None):
+    headers = {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    issues = []
+    page = 1
+    page_size = 500
+
+    while True:
+        params = {
+            "componentKeys": project_key,
+            "ps": page_size,
+            "p": page,
+            "additionalFields": "_all"
+        }
+        response = requests.get(f"{base_url}/api/issues/search", headers=headers, params=params)
+        response.raise_for_status()
+        data = response.json()
+        issues.extend(data["issues"])
+
+        if page * page_size >= data["total"]:
+            break
+        page += 1
+
+    return issues
+
+def categorize_issues_by_perspective(issues):
+    categorized = defaultdict(list)
+
+    for issue in issues:
+        tags = issue.get("tags", [])
+        matched = False
+
+        for perspective, tag in PERSPECTIVE_TAGS.items():
+            if tag is None or tag in tags:
+                categorized[perspective].append(issue)
+                matched = True
+
+        # If no tag matched, still include in "Sonar"
+        if not matched:
+            categorized["Sonar"].append(issue)
+
+    return categorized
+
+def write_csv(categorized_issues, output_file):
+    keys = ["key", "rule", "severity", "component", "line", "message", "status", "creationDate", "updateDate"]
+
+    with open(output_file, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+
+        for perspective, issues in categorized_issues.items():
+            writer.writerow([perspective])  # Table title
+            writer.writerow(keys)           # Header
+
+            for issue in issues:
+                row = [issue.get(k, "") for k in keys]
+                writer.writerow(row)
+
+            writer.writerow([])  # Empty row to separate tables
+
+    print(f"Issues categorized and exported to '{output_file}'.")
+
+def main():
+    parser = argparse.ArgumentParser(description="Export SonarQube issues by perspective.")
+    parser.add_argument("--base-url", required=True, help="SonarQube server URL")
+    parser.add_argument("--project", required=True, help="SonarQube project key")
+    parser.add_argument("--token", help="SonarQube API token")
+    parser.add_argument("--output", required=True, help="Output CSV filename")
+
+    args = parser.parse_args()
+
+    all_issues = get_issues(args.base_url, args.project, args.token)
+    categorized = categorize_issues_by_perspective(all_issues)
+    write_csv(categorized, args.output)
+
+if __name__ == "__main__":
+    main()
