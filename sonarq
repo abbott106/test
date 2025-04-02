@@ -1,0 +1,61 @@
+import requests
+import csv
+import argparse
+
+def get_issues(base_url, project_key, token=None):
+    issues = []
+    page = 1
+    page_size = 100
+
+    headers = {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    while True:
+        params = {
+            "componentKeys": project_key,
+            "ps": page_size,
+            "p": page
+        }
+
+        response = requests.get(f"{base_url}/api/issues/search", headers=headers, params=params)
+        response.raise_for_status()
+        data = response.json()
+        issues.extend(data["issues"])
+
+        if page * page_size >= data["total"]:
+            break
+        page += 1
+
+    return issues
+
+def export_to_csv(issues, filename):
+    if not issues:
+        print("No issues found.")
+        return
+
+    keys = ["key", "rule", "severity", "component", "project", "line", "message", "status", "creationDate", "updateDate"]
+
+    with open(filename, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=keys)
+        writer.writeheader()
+        for issue in issues:
+            row = {k: issue.get(k, "") for k in keys}
+            writer.writerow(row)
+
+    print(f"Exported {len(issues)} issues to {filename}")
+
+def main():
+    parser = argparse.ArgumentParser(description="Export SonarQube issues to CSV.")
+    parser.add_argument("--base-url", required=True, help="SonarQube server URL (e.g., http://localhost:9000)")
+    parser.add_argument("--project", required=True, help="Project key")
+    parser.add_argument("--token", help="Authentication token (optional)")
+    parser.add_argument("--output", required=True, help="CSV filename to export to")
+
+    args = parser.parse_args()
+
+    issues = get_issues(args.base_url, args.project, args.token)
+    export_to_csv(issues, args.output)
+
+if __name__ == "__main__":
+    main()
