@@ -1,0 +1,130 @@
+import requests
+from collections import defaultdict
+from openpyxl import Workbook
+from openpyxl.styles import Font
+import argparse
+
+# Define perspective tags
+PERSPECTIVE_TAGS = {
+    "Sonar": None,
+    "PCI DSS": "pci-dss",
+    "OWASP": "owasp",
+    "CWE": "cwe",
+    "STIG": "stig",
+    "CASA": "casa",
+}
+
+def get_issues(base_url, project_key, token=None):
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    issues = []
+    page = 1
+    page_size = 500
+
+    while True:
+        params = {
+            "componentKeys": project_key,
+            "ps": page_size,
+            "p": page,
+            "additionalFields": "_all"
+        }
+        response = requests.get(f"{base_url}/api/issues/search", headers=headers, params=params)
+        response.raise_for_status()
+        data = response.json()
+        issues.extend(data["issues"])
+
+        if page * page_size >= data["total"]:
+            break
+        page += 1
+
+    return issues
+
+def get_quality_gate_status(base_url, project_key, token=None):
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    response = requests.get(f"{base_url}/api/qualitygates/project_status",
+                            headers=headers,
+                            params={"projectKey": project_key})
+    response.raise_for_status()
+    return response.json()["projectStatus"]["status"]
+
+def get_project_grades(base_url, project_key, token=None):
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    metrics = "reliability_rating,security_rating,maintainability_rating"
+    response = requests.get(f"{base_url}/api/measures/component",
+                            headers=headers,
+                            params={"component": project_key, "metricKeys": metrics})
+    response.raise_for_status()
+    return {m["metric"]: m["value"] for m in response.json()["component"]["measures"]}
+
+def count_issues_by_type(issues):
+    summary = {"BUG": 0, "VULNERABILITY": 0, "CODE_SMELL": 0}
+    for issue in issues:
+        issue_type = issue.get("type")
+        if issue_type in summary:
+            summary[issue_type] += 1
+    return summary
+
+def categorize_issues_by_perspective(issues):
+    categorized = defaultdict(list)
+    for issue in issues:
+        tags = issue.get("tags", [])
+        matched = False
+        for perspective, tag in PERSPECTIVE_TAGS.items():
+            if tag is None or tag in tags:
+                categorized[perspective].append(issue)
+                matched = True
+        if not matched:
+            categorized["Sonar"].append(issue)
+    return categorized
+
+def write_excel(filename, categorized_issues, quality_status, grades, issue_summary):
+    wb = Workbook()
+    ws_summary = wb.active
+    ws_summary.title = "Summary"
+
+    bold = Font(bold=True)
+
+    # Write summary sheet
+    ws_summary.append(["Project Summary"])
+    ws_summary["A1"].font = bold
+    ws_summary.append(["Quality Gate Status", quality_status])
+    ws_summary.append(["Reliability Grade", grades.get("reliability_rating", "N/A")])
+    ws_summary.append(["Security Grade", grades.get("security_rating", "N/A")])
+    ws_summary.append(["Maintainability Grade", grades.get("maintainability_rating", "N/A")])
+    ws_summary.append(["Bug Count", issue_summary.get("BUG", 0)])
+    ws_summary.append(["Vulnerability Count", issue_summary.get("VULNERABILITY", 0)])
+    ws_summary.append(["Code Smell Count", issue_summary.get("CODE_SMELL", 0)])
+
+    # Write individual perspective sheets
+    headers = ["key", "rule", "severity", "component", "line", "message", "status", "creationDate", "updateDate"]
+
+    for perspective, issues in categorized_issues.items():
+        ws = wb.create_sheet(title=perspective[:31])  # Sheet name limit
+        ws.append(headers)
+        for cell in ws[1]:
+            cell.font = bold
+        for issue in issues:
+            row = [issue.get(h, "") for h in headers]
+            ws.append(row)
+
+    wb.save(filename)
+
+def main():
+    parser = argparse.ArgumentParser(description="Generate SonarQube issue report in Excel format.")
+    parser.add_argument("--base-url", required=True, help="SonarQube base URL (e.g., http://localhost:9000)")
+    parser.add_argument("--project", required=True, help="Project key")
+    parser.add_argument("--token", help="Authentication token (optional)")
+    parser.add_argument("--output", required=True, help="Output Excel filename (e.g., report.xlsx)")
+
+    args = parser.parse_args()
+
+    issues = get_issues(args.base_url, args.project, args.token)
+    quality_status = get_quality_gate_status(args.base_url, args.project, args.token)
+    grades = get_project_grades(args.base_url, args.project, args.token)
+    issue_summary = count_issues_by_type(issues)
+    categorized = categorize_issues_by_perspective(issues)
+
+    write_excel(args.output, categorized, quality_status, grades, issue_summary)
+    print(f"Report generated successfully: {args.output}")
+
+if __name__ == "__main__":
+    main()
