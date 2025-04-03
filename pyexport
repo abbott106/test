@@ -1,0 +1,123 @@
+import requests
+import csv
+import argparse
+from collections import defaultdict
+
+# Define the perspectives and associated tags
+PERSPECTIVE_TAGS = {
+    "Sonar": None,
+    "PCI DSS": "pci-dss",
+    "OWASP": "owasp",
+    "CWE": "cwe",
+    "STIG": "stig",
+    "CASA": "casa",
+}
+
+def get_issues(base_url, project_key, token=None):
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    issues = []
+    page = 1
+    page_size = 500
+
+    while True:
+        params = {
+            "componentKeys": project_key,
+            "ps": page_size,
+            "p": page,
+            "additionalFields": "_all"
+        }
+        response = requests.get(f"{base_url}/api/issues/search", headers=headers, params=params)
+        response.raise_for_status()
+        data = response.json()
+        issues.extend(data["issues"])
+
+        if page * page_size >= data["total"]:
+            break
+        page += 1
+
+    return issues
+
+def get_quality_gate_status(base_url, project_key, token=None):
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    response = requests.get(f"{base_url}/api/qualitygates/project_status",
+                            headers=headers,
+                            params={"projectKey": project_key})
+    response.raise_for_status()
+    return response.json()["projectStatus"]["status"]
+
+def get_project_grades(base_url, project_key, token=None):
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    metrics = "reliability_rating,security_rating,maintainability_rating"
+    response = requests.get(f"{base_url}/api/measures/component",
+                            headers=headers,
+                            params={"component": project_key, "metricKeys": metrics})
+    response.raise_for_status()
+    return {m["metric"]: m["value"] for m in response.json()["component"]["measures"]}
+
+def count_issues_by_type(issues):
+    summary = {"BUG": 0, "VULNERABILITY": 0, "CODE_SMELL": 0}
+    for issue in issues:
+        issue_type = issue.get("type")
+        if issue_type in summary:
+            summary[issue_type] += 1
+    return summary
+
+def categorize_issues_by_perspective(issues):
+    categorized = defaultdict(list)
+    for issue in issues:
+        tags = issue.get("tags", [])
+        matched = False
+        for perspective, tag in PERSPECTIVE_TAGS.items():
+            if tag is None or tag in tags:
+                categorized[perspective].append(issue)
+                matched = True
+        if not matched:
+            categorized["Sonar"].append(issue)
+    return categorized
+
+def write_csv(filename, categorized_issues, quality_status, grades, issue_summary):
+    keys = ["key", "rule", "severity", "component", "line", "message", "status", "creationDate", "updateDate"]
+
+    with open(filename, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+
+        # Summary section
+        writer.writerow(["PROJECT SUMMARY"])
+        writer.writerow(["Quality Gate Status", quality_status])
+        writer.writerow(["Reliability Grade", grades.get("reliability_rating", "N/A")])
+        writer.writerow(["Security Grade", grades.get("security_rating", "N/A")])
+        writer.writerow(["Maintainability Grade", grades.get("maintainability_rating", "N/A")])
+        writer.writerow(["Bug Count", issue_summary.get("BUG", 0)])
+        writer.writerow(["Vulnerability Count", issue_summary.get("VULNERABILITY", 0)])
+        writer.writerow(["Code Smell Count", issue_summary.get("CODE_SMELL", 0)])
+        writer.writerow([])
+
+        # Each perspective
+        for perspective, issues in categorized_issues.items():
+            writer.writerow([f"{perspective} Perspective"])
+            writer.writerow(keys)
+            for issue in issues:
+                writer.writerow([issue.get(k, "") for k in keys])
+            writer.writerow([])  # spacer
+
+    print(f"Report written to {filename}")
+
+def main():
+    parser = argparse.ArgumentParser(description="Generate SonarQube report CSV without external libs.")
+    parser.add_argument("--base-url", required=True, help="SonarQube base URL (e.g., http://localhost:9000)")
+    parser.add_argument("--project", required=True, help="SonarQube project key")
+    parser.add_argument("--token", help="Authentication token (optional)")
+    parser.add_argument("--output", required=True, help="Output CSV file path (e.g., report.csv)")
+
+    args = parser.parse_args()
+
+    issues = get_issues(args.base_url, args.project, args.token)
+    quality_status = get_quality_gate_status(args.base_url, args.project, args.token)
+    grades = get_project_grades(args.base_url, args.project, args.token)
+    issue_summary = count_issues_by_type(issues)
+    categorized = categorize_issues_by_perspective(issues)
+
+    write_csv(args.output, categorized, quality_status, grades, issue_summary)
+
+if __name__ == "__main__":
+    main()
